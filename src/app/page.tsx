@@ -47,7 +47,7 @@ const HOW_IT_WORKS: { step: string; title: string; desc: string; icon: IconName 
   {
     step: "03",
     title: "Own & Download",
-    desc: "Ownership is transferred on Injective blockchain. Download your files from IPFS anytime — forever.",
+    desc: "Ownership is transferred on Injective blockchain. Download links are revealed only to verified owners.",
     icon: "download",
   },
 ];
@@ -78,7 +78,7 @@ const WHY_BLOCKCHAIN: { icon: IconName; color: string; title: string; desc: stri
     icon: "shield",
     color: TOKENS.cyan,
     title: "Tamper-Proof",
-    desc: "Blueprints and specs stored on IPFS — content-addressed and immutable.",
+    desc: "Blueprints and specs are stored in Firebase while access is gated by wallet ownership.",
   },
   {
     icon: "chain",
@@ -212,7 +212,7 @@ export default function LandingPage() {
                 textTransform: "uppercase",
               }}
             >
-              Built on Injective · IPFS Storage · Blockchain Ownership
+              Built on Injective · Firebase Storage · Ownership-Gated Files
             </span>
           </div>
 
@@ -252,7 +252,8 @@ export default function LandingPage() {
           >
             Buy, sell, and own blueprints, BIM models, engineering specs, and
             construction project files using cryptocurrency. Verified ownership
-            on Injective blockchain. Files stored permanently on IPFS.
+            on Injective blockchain. Files stored in Firebase and revealed only
+            to verified owners.
           </p>
 
           <div

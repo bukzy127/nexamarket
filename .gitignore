@@ -9,3 +9,4 @@ out
 .vercel
 .firebase
 firebase-debug.log
+.data

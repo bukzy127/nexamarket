@@ -18,6 +18,8 @@ export interface Project {
   price: number;
   /** Wallet address (or short form) of current owner. */
   owner: string;
+  /** Original creator/seller wallet address. */
+  creator?: string;
   rating: number;
   reviews: number;
   tags: string[];
@@ -25,9 +27,14 @@ export interface Project {
   preview: string;
   featured: boolean;
   sales: number;
-  /** IPFS CID of the project file. */
+  /** Legacy IPFS CID field, kept for later if IPFS is re-enabled. */
   cid?: string;
+  /** Firebase Storage download URL for the private project package. */
   fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  storageProvider?: "firebase";
+  storagePath?: string;
   createdAt?: string;
   updatedAt?: string;
 }

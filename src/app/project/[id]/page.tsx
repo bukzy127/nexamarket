@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { TOKENS } from "@/lib/tokens";
-import { findProject, SAMPLE_PROJECTS } from "@/lib/mock";
 import { useWallet } from "@/hooks/useWallet";
+import { useProjectCatalog } from "@/hooks/useProjectCatalog";
+import { purchaseProjectOnChain } from "@/lib/injectiveContract";
 import { useWalletModal } from "@/components/WalletModalProvider";
 import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
@@ -13,10 +14,10 @@ import Badge from "@/components/ui/Badge";
 import Icon, { type IconName } from "@/components/ui/Icon";
 
 const TX_STEPS: { label: string; icon: IconName }[] = [
-  { label: "Initiating transaction", icon: "wallet" },
-  { label: "Verifying wallet signature", icon: "shield" },
-  { label: "Smart contract executing", icon: "chain" },
-  { label: "Asset ownership transferred on-chain", icon: "check" },
+  { label: "Verifying wallet", icon: "wallet" },
+  { label: "Checking INJ balance", icon: "shield" },
+  { label: "Transferring payment to owner", icon: "chain" },
+  { label: "Unlocking Firebase file link", icon: "check" },
 ];
 
 const TABS = ["overview", "files", "history", "reviews"] as const;
@@ -25,32 +26,18 @@ type Tab = (typeof TABS)[number];
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const project = findProject(params.id);
-
   const wallet = useWallet();
   const { open: openWallet } = useWalletModal();
+  const { projects, findProject, hasAccess, markPurchased } =
+    useProjectCatalog(wallet.address);
+  const project = findProject(params.id);
 
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [purchased, setPurchased] = useState(false);
   const [showTxModal, setShowTxModal] = useState(false);
   const [txStep, setTxStep] = useState(0);
-
-  useEffect(() => {
-    if (!showTxModal) return;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    [0, 1, 2, 3].forEach((s, i) => {
-      timers.push(setTimeout(() => setTxStep(s + 1), i * 1200));
-    });
-    timers.push(
-      setTimeout(() => {
-        setShowTxModal(false);
-        setPurchased(true);
-      }, 5200),
-    );
-    return () => {
-      timers.forEach(clearTimeout);
-    };
-  }, [showTxModal]);
+  const [txError, setTxError] = useState<string | null>(null);
+  const [securedFileUrl, setSecuredFileUrl] = useState<string | null>(null);
 
   if (!project) {
     return (
@@ -76,18 +63,83 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const isOwned = purchased;
+  const currentProject = project;
+  const isOwned = purchased || hasAccess(currentProject);
 
-  function handleBuy() {
-    if (!wallet.connected) {
+  const wait = (ms: number) =>
+    new Promise((resolve) => window.setTimeout(resolve, ms));
+
+  async function requestVerifiedDownload(openFile = false): Promise<string | null> {
+    if (!wallet.address) {
+      openWallet();
+      return null;
+    }
+
+    const res = await fetch(`/api/projects/${currentProject.id}/download`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet: wallet.address }),
+    });
+
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error || "Download access could not be verified.");
+    }
+
+    const data = (await res.json()) as { fileUrl?: string };
+    setSecuredFileUrl(data.fileUrl || null);
+    if (openFile && data.fileUrl) window.open(data.fileUrl, "_blank");
+    return data.fileUrl || null;
+  }
+
+  async function handleBuy() {
+    const buyer = wallet.address;
+    if (!wallet.connected || !buyer) {
       openWallet();
       return;
     }
+
     setTxStep(0);
+    setTxError(null);
     setShowTxModal(true);
+
+    try {
+      await wait(650);
+      setTxStep(1);
+      await wait(650);
+      setTxStep(2);
+      const chain = await purchaseProjectOnChain(
+        currentProject,
+        buyer,
+        wallet.balance,
+      );
+
+      const purchaseRes = await fetch(`/api/projects/${currentProject.id}/purchase`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet: buyer, txHash: chain.txHash }),
+      });
+      if (!purchaseRes.ok) {
+        const data = (await purchaseRes.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(data.error || "Purchase could not be verified.");
+      }
+
+      await wait(650);
+      setTxStep(3);
+      markPurchased(currentProject.id);
+      setPurchased(true);
+      await requestVerifiedDownload(false);
+      await wallet.refreshBalance();
+      await wait(450);
+      setShowTxModal(false);
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : "Purchase failed.");
+    }
   }
 
-  const related = SAMPLE_PROJECTS.filter(
+  const related = projects.filter(
     (p) => p.id !== project.id && p.category === project.category,
   ).slice(0, 3);
 
@@ -132,7 +184,7 @@ export default function ProjectDetailPage() {
               <Icon name="zap" size={28} color={TOKENS.cyan} />
             </div>
             <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>
-              Processing Payment
+              {txError ? "Payment Failed" : "Processing Payment"}
             </h3>
             <p
               style={{
@@ -141,7 +193,9 @@ export default function ProjectDetailPage() {
                 marginBottom: 32,
               }}
             >
-              Injective smart contract executing…
+              {txError
+                ? txError
+                : "Injective smart contract executing and verifying access…"}
             </p>
             <div
               style={{ display: "flex", flexDirection: "column", gap: 12 }}
@@ -236,6 +290,19 @@ export default function ProjectDetailPage() {
                 </div>
               ))}
             </div>
+            {txError && (
+              <Btn
+                variant="secondary"
+                style={{
+                  width: "100%",
+                  justifyContent: "center",
+                  marginTop: 20,
+                }}
+                onClick={() => setShowTxModal(false)}
+              >
+                Close
+              </Btn>
+            )}
           </Card>
         </div>
       )}
@@ -509,10 +576,9 @@ export default function ProjectDetailPage() {
                   }}
                 >
                   This asset package includes all drawing files, documentation,
-                  and associated data. All files are stored on IPFS with CID
-                  verification ensuring tamper-proof delivery. Ownership is
-                  registered on the Injective blockchain — providing immutable,
-                  auditable proof of purchase for your records.
+                  and associated data. Files are currently stored in Firebase
+                  Storage, and the saved file link is only revealed after this
+                  wallet owns or purchases the listing.
                 </p>
                 <div
                   className="meta-grid"
@@ -523,11 +589,16 @@ export default function ProjectDetailPage() {
                   }}
                 >
                   {[
-                    { label: "File Size", value: "~48 MB" },
+                    {
+                      label: "File Size",
+                      value: project.fileSize
+                        ? `${(project.fileSize / 1024 / 1024).toFixed(2)} MB`
+                        : "~48 MB",
+                    },
                     { label: "License", value: "Commercial" },
                     { label: "Last Updated", value: "Apr 2026" },
                     { label: "Blockchain", value: "Injective" },
-                    { label: "Storage", value: "IPFS + Firebase" },
+                    { label: "Storage", value: "Firebase Storage" },
                     {
                       label: "Asset ID",
                       value: `#${String(project.id).padStart(5, "0")}`,
@@ -580,12 +651,54 @@ export default function ProjectDetailPage() {
                 </h3>
                 {isOwned ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {securedFileUrl && (
+                      <div
+                        style={{
+                          padding: "16px 18px",
+                          background: "rgba(16,217,126,0.08)",
+                          borderRadius: 12,
+                          border: "1px solid rgba(16,217,126,0.25)",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: TOKENS.green,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                            fontWeight: 700,
+                            marginBottom: 8,
+                          }}
+                        >
+                          Contract-verified Firebase file link
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: TOKENS.textMuted,
+                            fontFamily: "var(--font-mono), monospace",
+                            wordBreak: "break-all",
+                            lineHeight: 1.6,
+                            marginBottom: 12,
+                          }}
+                        >
+                          {securedFileUrl}
+                        </div>
+                        <Btn
+                          variant="green"
+                          size="sm"
+                          icon="download"
+                          onClick={() => window.open(securedFileUrl, "_blank")}
+                        >
+                          Open Firebase File
+                        </Btn>
+                      </div>
+                    )}
                     {[
-                      "drawings/",
-                      "specifications/",
-                      "calculations/",
-                      "README.pdf",
-                      "delivery_schedule.xlsx",
+                      project.fileName || "project-package.zip",
+                      "license.txt",
+                      "metadata.json",
                     ].map((f, i) => (
                       <div
                         key={i}
@@ -612,7 +725,14 @@ export default function ProjectDetailPage() {
                             {f}
                           </span>
                         </div>
-                        <Btn variant="secondary" size="sm" icon="download">
+                        <Btn
+                          variant="secondary"
+                          size="sm"
+                          icon="download"
+                          onClick={() => {
+                            void requestVerifiedDownload(true);
+                          }}
+                        >
                           Download
                         </Btn>
                       </div>
@@ -911,6 +1031,9 @@ export default function ProjectDetailPage() {
                     style={{ width: "100%", justifyContent: "center" }}
                     variant="green"
                     icon="download"
+                    onClick={() => {
+                      void requestVerifiedDownload(true);
+                    }}
                   >
                     Download Files
                   </Btn>
@@ -927,7 +1050,7 @@ export default function ProjectDetailPage() {
                     icon="zap"
                     size="lg"
                   >
-                    {wallet.connected ? "Buy Now" : "Connect & Buy"}
+                    {wallet.connected ? "Download / Purchase" : "Connect Wallet"}
                   </Btn>
                   <div
                     style={{
@@ -954,7 +1077,7 @@ export default function ProjectDetailPage() {
                 {(
                   [
                     { icon: "shield", text: "On-chain ownership transfer" },
-                    { icon: "chain", text: "IPFS verified file storage" },
+                    { icon: "chain", text: "Firebase link gated by ownership" },
                     { icon: "download", text: "Lifetime download access" },
                     { icon: "check", text: "Commercial use license" },
                     { icon: "blueprint", text: "CAD + PDF formats included" },

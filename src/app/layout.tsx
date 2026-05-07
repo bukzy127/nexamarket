@@ -23,7 +23,7 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "NexaMarket — Decentralized Construction Asset Marketplace",
   description:
-    "Buy, sell, and own blueprints, BIM models, engineering specs, and construction project files using cryptocurrency. Verified ownership on Injective blockchain. Files stored permanently on IPFS.",
+    "Buy, sell, and own blueprints, BIM models, engineering specs, and construction project files using cryptocurrency. Verified ownership on Injective blockchain. Files stored in Firebase Storage.",
   keywords: [
     "Injective",
     "Web3",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     "Blueprints",
     "BIM",
     "CAD",
-    "IPFS",
+    "Firebase Storage",
     "Marketplace",
     "AEC",
   ],

@@ -1,10 +1,17 @@
 "use client";
 
-import { CSSProperties, useState } from "react";
+import { CSSProperties, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletModal } from "@/components/WalletModalProvider";
+import { uploadToFirebaseStorage } from "@/lib/firebaseStorage";
+import {
+  createUploadedProject,
+  useProjectCatalog,
+} from "@/hooks/useProjectCatalog";
+import { registerProjectOnChain } from "@/lib/injectiveContract";
+import type { Category } from "@/types";
 import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
 import Badge from "@/components/ui/Badge";
@@ -47,25 +54,18 @@ const STEPS = [
 ];
 
 const STORAGE_OPTIONS: {
-  id: "ipfs" | "firebase";
+  id: "firebase";
   label: string;
   desc: string;
   icon: IconName;
   badge: string | null;
 }[] = [
   {
-    id: "ipfs",
-    label: "IPFS (Decentralized)",
-    desc: "Content-addressed, tamper-resistant, permanent",
-    icon: "chain",
-    badge: "Recommended",
-  },
-  {
     id: "firebase",
     label: "Firebase Storage",
-    desc: "Faster downloads, centralized backup",
+    desc: "Project files are saved in Firebase while IPFS is paused",
     icon: "zap",
-    badge: null,
+    badge: "Active",
   },
 ];
 
@@ -76,7 +76,7 @@ interface FormState {
   price: string;
   tags: string;
   license: string;
-  storage: "ipfs" | "firebase";
+  storage: "firebase";
   fileName: string;
 }
 
@@ -87,7 +87,7 @@ const EMPTY_FORM: FormState = {
   price: "",
   tags: "",
   license: "commercial",
-  storage: "ipfs",
+  storage: "firebase",
   fileName: "",
 };
 
@@ -118,33 +118,83 @@ const labelStyle: CSSProperties = {
 export default function UploadPage() {
   const wallet = useWallet();
   const { open: openWallet } = useWalletModal();
+  const { addProject } = useProjectCatalog(wallet.address);
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [step, setStep] = useState(1);
   const [dragOver, setDragOver] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishedProjectId, setPublishedProjectId] = useState<number | null>(
+    null,
+  );
+  const [publishedFileUrl, setPublishedFileUrl] = useState<string | null>(null);
+  const [publishedTxHash, setPublishedTxHash] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
   function setField<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  function handleSubmit() {
+  function selectFile(file: File) {
+    setSelectedFile(file);
+    setField("fileName", file.name);
+  }
+
+  async function handleSubmit() {
+    if (!selectedFile || !wallet.address) return;
     setUploading(true);
+    setPublishError(null);
     setProgress(0);
-    const interval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) {
-          clearInterval(interval);
-          setUploading(false);
-          setSubmitted(true);
-          return 100;
-        }
-        return p + 5;
+    const interval = window.setInterval(() => {
+      setProgress((p) => Math.min(p + 6, 90));
+    }, 220);
+
+    try {
+      const upload = await uploadToFirebaseStorage(selectedFile, wallet.address);
+      const project = createUploadedProject({
+        title: form.title,
+        description: form.description,
+        category: form.category as Category,
+        price: parseFloat(form.price),
+        tags: form.tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+        owner: wallet.address,
+        fileName: selectedFile.name,
+        fileSize: upload.size,
+        fileUrl: upload.url,
+        storagePath: upload.path,
       });
-    }, 120);
+      const metadataRes = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(project),
+      });
+      if (!metadataRes.ok) {
+        throw new Error(`Metadata save failed: ${await metadataRes.text()}`);
+      }
+
+      const chain = await registerProjectOnChain(project, wallet.address);
+      addProject(project);
+      setPublishedProjectId(project.id);
+      setPublishedFileUrl(upload.url);
+      setPublishedTxHash(chain.txHash);
+      setProgress(100);
+      setSubmitted(true);
+    } catch (err) {
+      setPublishError(
+        err instanceof Error ? err.message : "Unable to publish asset.",
+      );
+    } finally {
+      window.clearInterval(interval);
+      setUploading(false);
+    }
   }
 
   if (!wallet.connected) {
@@ -246,8 +296,9 @@ export default function UploadPage() {
             <strong style={{ color: TOKENS.text }}>
               {form.title || "Your asset"}
             </strong>{" "}
-            has been uploaded to IPFS and registered on the Injective
-            blockchain.
+            has been uploaded to Firebase Storage. Its private file link is now
+            saved with the listing metadata and only shown to the owner or a
+            purchaser.
           </p>
           <div
             style={{
@@ -262,10 +313,19 @@ export default function UploadPage() {
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
-                { label: "CID", value: "Qm3xK7...f9aB2", mono: true },
-                { label: "Tx Hash", value: "0x7f2a...1b3c", mono: true },
-                { label: "Block", value: "#18,924,441", mono: true },
-                { label: "Network", value: "Injective Mainnet", mono: false },
+                { label: "Storage", value: "Firebase Storage", mono: false },
+                { label: "File", value: form.fileName, mono: true },
+                {
+                  label: "File Link",
+                  value: publishedFileUrl || "Saved with listing metadata",
+                  mono: true,
+                },
+                {
+                  label: "Contract Tx",
+                  value: publishedTxHash || "Pending registration",
+                  mono: true,
+                },
+                { label: "Visibility", value: "Contract-verified only", mono: false },
               ].map((item, i) => (
                 <div
                   key={i}
@@ -302,7 +362,13 @@ export default function UploadPage() {
           </div>
           <div style={{ display: "flex", gap: 12 }}>
             <Btn
-              onClick={() => router.push("/marketplace")}
+              onClick={() =>
+                router.push(
+                  publishedProjectId
+                    ? `/project/${publishedProjectId}`
+                    : "/marketplace",
+                )
+              }
               style={{ flex: 1, justifyContent: "center" }}
               icon="grid"
             >
@@ -314,6 +380,10 @@ export default function UploadPage() {
                 setSubmitted(false);
                 setStep(1);
                 setForm(EMPTY_FORM);
+                setSelectedFile(null);
+                setPublishedProjectId(null);
+                setPublishedFileUrl(null);
+                setPublishedTxHash(null);
               }}
               style={{ flex: 1, justifyContent: "center" }}
             >
@@ -350,7 +420,8 @@ export default function UploadPage() {
           </h1>
           <p style={{ color: TOKENS.textMuted, fontSize: 15 }}>
             Sell your blueprints, BIM models, specs, or calculations on
-            NexaMarket. Files stored on IPFS — ownership on Injective.
+            NexaMarket. Files stored on Firebase Storage and revealed only to
+            verified owners or buyers.
           </p>
         </div>
       </div>
@@ -536,6 +607,15 @@ export default function UploadPage() {
 
               <div>
                 <label style={labelStyle}>Project File (ZIP, RAR, TAR) *</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) selectFile(file);
+                  }}
+                  style={{ display: "none" }}
+                />
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -546,9 +626,9 @@ export default function UploadPage() {
                     e.preventDefault();
                     setDragOver(false);
                     const f = e.dataTransfer.files[0];
-                    if (f) setField("fileName", f.name);
+                    if (f) selectFile(f);
                   }}
-                  onClick={() => setField("fileName", "project-files.zip")}
+                  onClick={() => fileInputRef.current?.click()}
                   style={{
                     border: `2px dashed ${dragOver ? TOKENS.cyan : TOKENS.border}`,
                     borderRadius: 14,
@@ -879,10 +959,7 @@ export default function UploadPage() {
                     { label: "License", value: form.license, mono: false },
                     {
                       label: "Storage",
-                      value:
-                        form.storage === "ipfs"
-                          ? "IPFS (Decentralized)"
-                          : "Firebase Storage",
+                      value: "Firebase Storage",
                       mono: false,
                     },
                     { label: "File", value: form.fileName, mono: true },
@@ -945,13 +1022,10 @@ export default function UploadPage() {
                   style={{ display: "flex", flexDirection: "column", gap: 8 }}
                 >
                   {[
-                    "1. File uploaded to " +
-                      (form.storage === "ipfs"
-                        ? "IPFS via Pinata"
-                        : "Firebase Storage"),
-                    "2. CID / URL and metadata stored in Firestore",
-                    "3. Asset registered on Injective smart contract",
-                    "4. Listing goes live on NexaMarket marketplace",
+                    "1. File uploaded to Firebase Storage",
+                    "2. Metadata and Firebase URL saved through the backend",
+                    "3. Uploader access registered on Injective",
+                    "4. File link stays hidden until contract access is verified",
                   ].map((s, i) => (
                     <div
                       key={i}
@@ -988,8 +1062,7 @@ export default function UploadPage() {
                     }}
                   >
                     <span style={{ fontSize: 13, color: TOKENS.textMuted }}>
-                      Uploading to{" "}
-                      {form.storage === "ipfs" ? "IPFS" : "Firebase"}...
+                      Uploading to Firebase Storage...
                     </span>
                     <span
                       style={{
@@ -1019,6 +1092,22 @@ export default function UploadPage() {
                       }}
                     />
                   </div>
+                </div>
+              )}
+
+              {publishError && (
+                <div
+                  style={{
+                    padding: 14,
+                    borderRadius: 10,
+                    background: "rgba(244,63,94,0.08)",
+                    border: "1px solid rgba(244,63,94,0.25)",
+                    color: TOKENS.red,
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {publishError}
                 </div>
               )}
 

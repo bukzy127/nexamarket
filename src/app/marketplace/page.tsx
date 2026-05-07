@@ -6,11 +6,11 @@ import { useWallet } from "@/hooks/useWallet";
 import { useWalletModal } from "@/components/WalletModalProvider";
 import {
   CATEGORIES,
-  SAMPLE_PROJECTS,
   SORT_OPTIONS,
   type SortOption,
 } from "@/lib/mock";
 import type { Category } from "@/types";
+import { useProjectCatalog } from "@/hooks/useProjectCatalog";
 import ProjectCard from "@/components/ProjectCard";
 import Btn from "@/components/ui/Btn";
 import Icon from "@/components/ui/Icon";
@@ -18,6 +18,7 @@ import Icon from "@/components/ui/Icon";
 export default function MarketplacePage() {
   const wallet = useWallet();
   const { open: openWallet } = useWalletModal();
+  const { projects } = useProjectCatalog(wallet.address);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<"All" | Category>("All");
@@ -26,7 +27,7 @@ export default function MarketplacePage() {
   const [maxPrice, setMaxPrice] = useState(70);
 
   const filtered = useMemo(() => {
-    const list = SAMPLE_PROJECTS.filter((p) => {
+    const list = projects.filter((p) => {
       const matchCat = category === "All" || p.category === category;
       const matchSearch =
         !search ||
@@ -42,7 +43,7 @@ export default function MarketplacePage() {
       if (sort === "Most Sold") return b.sales - a.sales;
       return b.id - a.id;
     });
-  }, [search, category, sort, maxPrice]);
+  }, [projects, search, category, sort, maxPrice]);
 
   return (
     <div style={{ minHeight: "100vh", background: TOKENS.bg0, paddingTop: 64 }}>

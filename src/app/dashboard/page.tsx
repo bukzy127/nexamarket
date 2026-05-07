@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletModal } from "@/components/WalletModalProvider";
-import { SAMPLE_PROJECTS } from "@/lib/mock";
+import { useProjectCatalog } from "@/hooks/useProjectCatalog";
 import { shortAddress } from "@/lib/wallet";
 import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
@@ -78,6 +78,7 @@ const MY_LISTINGS = [
 export default function DashboardPage() {
   const wallet = useWallet();
   const { open: openWallet } = useWalletModal();
+  const { ownedProjects } = useProjectCatalog(wallet.address);
   const router = useRouter();
   const [active, setActive] = useState<Section>("overview");
 
@@ -144,7 +145,7 @@ export default function DashboardPage() {
     );
   }
 
-  const owned = SAMPLE_PROJECTS.slice(0, 3);
+  const owned = ownedProjects;
   const balance = wallet.balance ?? "142.6";
   const balanceUsd = (parseFloat(balance) * 22.4).toFixed(2);
 
