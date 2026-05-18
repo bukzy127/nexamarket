@@ -2,7 +2,11 @@
 
 import { create } from "zustand";
 import type { WalletState, WalletType } from "@/types";
-import { connect as walletConnect, shortAddress } from "@/lib/wallet";
+import {
+  connect as walletConnect,
+  readBalance,
+  shortAddress,
+} from "@/lib/wallet";
 
 interface WalletStore extends WalletState {
   connect: (type: WalletType) => Promise<void>;
@@ -28,11 +32,6 @@ function persist(state: WalletState) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-/** Generate a plausible-looking mock balance for the dashboard. */
-function mockBalance(): string {
-  return (Math.random() * 50 + 5).toFixed(3);
-}
-
 export const useWallet = create<WalletStore>((set, get) => {
   const initial = persisted();
   return {
@@ -43,10 +42,11 @@ export const useWallet = create<WalletStore>((set, get) => {
 
     async connect(type) {
       const { address } = await walletConnect(type);
+      const balance = await readBalance(address);
       const state: WalletState = {
         address,
         type,
-        balance: mockBalance(),
+        balance,
         connected: true,
       };
       persist(state);
@@ -60,8 +60,9 @@ export const useWallet = create<WalletStore>((set, get) => {
     },
 
     async refreshBalance() {
-      if (!get().address) return;
-      set({ balance: mockBalance() });
+      const address = get().address;
+      if (!address) return;
+      set({ balance: await readBalance(address) });
     },
 
     short() {

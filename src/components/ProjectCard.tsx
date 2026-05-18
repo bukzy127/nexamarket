@@ -206,13 +206,13 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
               <span
                 style={{ fontSize: 12, fontWeight: 600, color: TOKENS.text }}
               >
-                {project.rating}
+                {project.reviews > 0 ? project.rating : "No reviews yet"}
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <Icon name="download" size={12} color={TOKENS.textDim} />
               <span style={{ fontSize: 12, color: TOKENS.textMuted }}>
-                {project.sales}
+                {project.sales > 0 ? project.sales : "No sales yet"}
               </span>
             </div>
           </div>

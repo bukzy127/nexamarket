@@ -35,7 +35,7 @@ export default function Footer() {
         </span>
       </div>
       <span style={{ fontSize: 12, color: TOKENS.textDim }}>
-        Powered by Injective · Firebase Storage
+        Powered by Injective · Supabase Storage
       </span>
       <span style={{ fontSize: 12, color: TOKENS.textDim }}>
         © {new Date().getFullYear()} NexaMarket

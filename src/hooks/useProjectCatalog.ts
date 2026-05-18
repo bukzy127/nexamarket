@@ -1,11 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { SAMPLE_PROJECTS } from "@/lib/mock";
 import type { Category, Project } from "@/types";
 
-const PROJECTS_KEY = "nexamarket:firebase-projects";
-const PURCHASES_KEY = "nexamarket:purchases";
 const CATALOG_EVENT = "nexamarket:catalog-updated";
 
 export interface UploadedProjectInput {
@@ -21,30 +18,6 @@ export interface UploadedProjectInput {
   storagePath: string;
 }
 
-function readJson<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson<T>(key: string, value: T) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(value));
-  window.dispatchEvent(new Event(CATALOG_EVENT));
-}
-
-function readUploadedProjects(): Project[] {
-  return readJson<Project[]>(PROJECTS_KEY, []);
-}
-
-function readPurchases(): Record<string, number[]> {
-  return readJson<Record<string, number[]>>(PURCHASES_KEY, {});
-}
-
 function normalizeAddress(addr: string | null | undefined): string {
   return (addr || "").toLowerCase();
 }
@@ -52,6 +25,12 @@ function normalizeAddress(addr: string | null | undefined): string {
 function nextColor(id: number): string {
   const colors = ["#0d2040", "#1a0d40", "#0d3020", "#2d1a00", "#001a2d"];
   return colors[id % colors.length];
+}
+
+function publicCopy(project: Project): Project {
+  const { fileUrl: _fileUrl, storagePath: _storagePath, ...safeProject } =
+    project;
+  return safeProject;
 }
 
 export function createUploadedProject(input: UploadedProjectInput): Project {
@@ -74,7 +53,7 @@ export function createUploadedProject(input: UploadedProjectInput): Project {
     fileUrl: input.fileUrl,
     fileName: input.fileName,
     fileSize: input.fileSize,
-    storageProvider: "firebase",
+    storageProvider: "supabase",
     storagePath: input.storagePath,
     createdAt: now,
     updatedAt: now,
@@ -82,69 +61,40 @@ export function createUploadedProject(input: UploadedProjectInput): Project {
 }
 
 export function useProjectCatalog(walletAddress?: string | null) {
-  const [uploadedProjects, setUploadedProjects] = useState<Project[]>([]);
-  const [serverProjects, setServerProjects] = useState<Project[]>([]);
-  const [purchases, setPurchases] = useState<Record<string, number[]>>({});
+  const [projects, setProjects] = useState<Project[]>([]);
 
   const refresh = useCallback(() => {
-    setUploadedProjects(readUploadedProjects());
-    setPurchases(readPurchases());
+    void fetch("/api/projects")
+      .then((res) => (res.ok ? res.json() : { projects: [] }))
+      .then((data: { projects?: Project[] }) => {
+        setProjects(data.projects || []);
+      })
+      .catch(() => setProjects([]));
   }, []);
 
   useEffect(() => {
     refresh();
-    void fetch("/api/projects")
-      .then((res) => (res.ok ? res.json() : { projects: [] }))
-      .then((data: { projects?: Project[] }) => {
-        setServerProjects(data.projects || []);
-      })
-      .catch(() => setServerProjects([]));
     window.addEventListener(CATALOG_EVENT, refresh);
-    window.addEventListener("storage", refresh);
-    return () => {
-      window.removeEventListener(CATALOG_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
-    };
+    return () => window.removeEventListener(CATALOG_EVENT, refresh);
   }, [refresh]);
-
-  const projects = useMemo(() => {
-    const byId = new Map<number, Project>();
-    [...SAMPLE_PROJECTS, ...serverProjects, ...uploadedProjects].forEach(
-      (project) => {
-        byId.set(project.id, project);
-      },
-    );
-    return Array.from(byId.values()).reverse();
-  }, [serverProjects, uploadedProjects]);
 
   const walletKey = normalizeAddress(walletAddress);
 
   const addProject = useCallback((project: Project) => {
-    const next = [project, ...readUploadedProjects()];
-    writeJson(PROJECTS_KEY, next);
-    setUploadedProjects(next);
+    setProjects((current) => [publicCopy(project), ...current]);
+    window.dispatchEvent(new Event(CATALOG_EVENT));
   }, []);
 
-  const markPurchased = useCallback(
-    (projectId: number) => {
-      if (!walletKey) return;
-      const current = readPurchases();
-      const owned = new Set(current[walletKey] || []);
-      owned.add(projectId);
-      const next = { ...current, [walletKey]: Array.from(owned) };
-      writeJson(PURCHASES_KEY, next);
-      setPurchases(next);
-    },
-    [walletKey],
-  );
+  const markPurchased = useCallback(() => {
+    window.dispatchEvent(new Event(CATALOG_EVENT));
+  }, []);
 
   const hasAccess = useCallback(
     (project: Project | undefined) => {
       if (!project || !walletKey) return false;
-      if (normalizeAddress(project.owner) === walletKey) return true;
-      return Boolean(purchases[walletKey]?.includes(project.id));
+      return normalizeAddress(project.owner) === walletKey;
     },
-    [purchases, walletKey],
+    [walletKey],
   );
 
   const ownedProjects = useMemo(
@@ -162,7 +112,7 @@ export function useProjectCatalog(walletAddress?: string | null) {
 
   return {
     projects,
-    uploadedProjects,
+    uploadedProjects: projects,
     ownedProjects,
     addProject,
     markPurchased,

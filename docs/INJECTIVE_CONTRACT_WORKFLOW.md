@@ -1,53 +1,40 @@
-# Injective Contract Workflow
+# Injective EVM Contract Workflow
 
-This project now has a CosmWasm contract scaffold in
-`contracts/nexa-marketplace`. The contract keeps the source of truth for access
-rights. Firestore stores metadata and Firebase Storage stores the actual file.
+NexaMarket uses MetaMask with Injective EVM Testnet.
 
-## Contract Responsibilities
+## Contract
 
-- `register_project`: called by the uploader after Firebase upload and metadata
-  save. It stores `project_id`, owner wallet, price, timestamps, and grants the
-  uploader access.
-- `purchase`: called by a buyer with native INJ funds equal to the project
-  price. The contract transfers the full amount directly to the project owner
-  and grants buyer access.
-- `has_access`: queried by the backend before returning a Firebase download
-  URL.
+`contracts/NexaMarketAccess.sol`
 
-No website fee is taken.
+Functions:
 
-## App Flow
+- `registerProject(projectId, price, metadataRef)` registers the uploader as
+  owner and grants uploader access.
+- `purchase(projectId)` requires exact INJ payment and transfers all funds
+  directly to the owner.
+- `hasAccess(projectId, wallet)` is the read-only access check used by the
+  backend before returning Supabase download URLs.
 
-1. User connects Keplr or Leap.
-2. User uploads through `/upload`.
-3. File uploads to Firebase Storage.
-4. Metadata is saved through `POST /api/projects`.
-5. Frontend calls the contract registration adapter.
+No platform fee is taken.
+
+## Runtime Flow
+
+1. User connects MetaMask.
+2. App switches MetaMask to Injective EVM Testnet.
+3. User uploads a file to Supabase Storage.
+4. Backend saves project metadata to the Supabase `projects` table.
+5. Frontend calls `registerProject(projectId, price, metadataRef)` on Injective
+   EVM, using the Supabase file URL as `metadataRef`.
 6. Buyer clicks `Download / Purchase`.
-7. Frontend checks local wallet balance and calls the purchase adapter.
-8. Backend records mock/dev purchase through `POST /api/projects/:id/purchase`
-   or verifies on-chain access when a contract address is configured.
-9. Download requests go through `POST /api/projects/:id/download`.
-10. The download route queries Injective `has_access`; if valid, it returns the
-    Firebase file URL.
+7. Frontend calls `purchase(projectId)` with exact INJ value.
+8. Backend confirms `hasAccess(projectId, buyer)`.
+9. Download route returns the Supabase file URL only after contract access is
+   true.
 
-## Environment
+## Injective EVM Testnet
 
-```bash
-NEXT_PUBLIC_INJECTIVE_NETWORK=testnet
-NEXT_PUBLIC_MARKETPLACE_CONTRACT=inj1...
-MARKETPLACE_CONTRACT=inj1...
-INJECTIVE_LCD_URL=https://testnet.sentry.lcd.injective.network
-```
-
-For local development, leaving `MARKETPLACE_CONTRACT` empty enables a mock
-chain-access fallback. The route still uses the same access gate, so the UI flow
-stays realistic.
-
-## Production Note
-
-The contract is ready as source, but transaction broadcasting still needs the
-Injective/CosmJS signing client wired into `src/lib/injectiveContract.ts` after
-the contract is compiled, deployed, and the address is available. Until then,
-the frontend uses a mock adapter when no contract address is set.
+- Chain ID: `1439`
+- Hex chain ID: `0x59f`
+- RPC: `https://k8s.testnet.json-rpc.injective.network/`
+- Explorer: `https://testnet.blockscout.injective.network/`
+- Faucet: `https://testnet.faucet.injective.network/`

@@ -16,9 +16,12 @@ const WALLETS: {
   desc: string;
   color: string;
 }[] = [
-  { id: "keplr", name: "Keplr Wallet", desc: "Cosmos ecosystem wallet", color: "#5c6bc0" },
-  { id: "leap", name: "Leap Wallet", desc: "Multi-chain Cosmos wallet", color: "#7c3aed" },
-  { id: "metamask", name: "MetaMask", desc: "EVM compatible wallet", color: "#f6851b" },
+  {
+    id: "metamask",
+    name: "MetaMask",
+    desc: "Injective EVM Testnet",
+    color: "#f6851b",
+  },
 ];
 
 export default function WalletModal({ onClose }: WalletModalProps) {
@@ -30,7 +33,8 @@ export default function WalletModal({ onClose }: WalletModalProps) {
     try {
       await wallet.connect(type);
       onClose();
-    } catch {
+    } catch (err) {
+      console.error(err);
       setConnecting(null);
     }
   }

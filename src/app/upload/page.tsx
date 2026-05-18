@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletModal } from "@/components/WalletModalProvider";
-import { uploadToFirebaseStorage } from "@/lib/firebaseStorage";
+import { uploadToSupabaseStorage } from "@/lib/supabaseStorage";
 import {
   createUploadedProject,
   useProjectCatalog,
@@ -54,16 +54,16 @@ const STEPS = [
 ];
 
 const STORAGE_OPTIONS: {
-  id: "firebase";
+  id: "supabase";
   label: string;
   desc: string;
   icon: IconName;
   badge: string | null;
 }[] = [
   {
-    id: "firebase",
-    label: "Firebase Storage",
-    desc: "Project files are saved in Firebase while IPFS is paused",
+    id: "supabase",
+    label: "Supabase Storage",
+    desc: "Files are uploaded to the project-files bucket",
     icon: "zap",
     badge: "Active",
   },
@@ -76,7 +76,7 @@ interface FormState {
   price: string;
   tags: string;
   license: string;
-  storage: "firebase";
+  storage: "supabase";
   fileName: string;
 }
 
@@ -87,7 +87,7 @@ const EMPTY_FORM: FormState = {
   price: "",
   tags: "",
   license: "commercial",
-  storage: "firebase",
+  storage: "supabase",
   fileName: "",
 };
 
@@ -155,7 +155,10 @@ export default function UploadPage() {
     }, 220);
 
     try {
-      const upload = await uploadToFirebaseStorage(selectedFile, wallet.address);
+      const upload = await uploadToSupabaseStorage(
+        selectedFile,
+        wallet.address,
+      );
       const project = createUploadedProject({
         title: form.title,
         description: form.description,
@@ -169,18 +172,20 @@ export default function UploadPage() {
         fileName: selectedFile.name,
         fileSize: upload.size,
         fileUrl: upload.url,
-        storagePath: upload.path,
+        storagePath: upload.url,
       });
       const metadataRes = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(project),
+        body: JSON.stringify({
+          project,
+        }),
       });
       if (!metadataRes.ok) {
         throw new Error(`Metadata save failed: ${await metadataRes.text()}`);
       }
 
-      const chain = await registerProjectOnChain(project, wallet.address);
+      const chain = await registerProjectOnChain(project);
       addProject(project);
       setPublishedProjectId(project.id);
       setPublishedFileUrl(upload.url);
@@ -296,7 +301,7 @@ export default function UploadPage() {
             <strong style={{ color: TOKENS.text }}>
               {form.title || "Your asset"}
             </strong>{" "}
-            has been uploaded to Firebase Storage. Its private file link is now
+            has been uploaded to Supabase Storage. Its private file link is now
             saved with the listing metadata and only shown to the owner or a
             purchaser.
           </p>
@@ -313,7 +318,7 @@ export default function UploadPage() {
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
-                { label: "Storage", value: "Firebase Storage", mono: false },
+                { label: "Storage", value: "Supabase Storage", mono: false },
                 { label: "File", value: form.fileName, mono: true },
                 {
                   label: "File Link",
@@ -420,7 +425,7 @@ export default function UploadPage() {
           </h1>
           <p style={{ color: TOKENS.textMuted, fontSize: 15 }}>
             Sell your blueprints, BIM models, specs, or calculations on
-            NexaMarket. Files stored on Firebase Storage and revealed only to
+            NexaMarket. Files stored on Supabase Storage and revealed only to
             verified owners or buyers.
           </p>
         </div>
@@ -827,21 +832,9 @@ export default function UploadPage() {
                     }}
                   >
                     <span>
-                      ≈{" "}
-                      <span style={{ color: TOKENS.text, fontWeight: 600 }}>
-                        ${(priceNum * 22.4).toFixed(2)} USD
-                      </span>
-                    </span>
-                    <span>
-                      Platform fee:{" "}
-                      <span style={{ color: TOKENS.gold }}>
-                        {(priceNum * 0.025).toFixed(3)} INJ (2.5%)
-                      </span>
-                    </span>
-                    <span>
-                      You receive:{" "}
+                      Payment route:{" "}
                       <span style={{ color: TOKENS.green }}>
-                        {(priceNum * 0.975).toFixed(3)} INJ
+                        direct on-chain transfer to seller
                       </span>
                     </span>
                   </div>
@@ -959,7 +952,7 @@ export default function UploadPage() {
                     { label: "License", value: form.license, mono: false },
                     {
                       label: "Storage",
-                      value: "Firebase Storage",
+                      value: "Supabase Storage",
                       mono: false,
                     },
                     { label: "File", value: form.fileName, mono: true },
@@ -1022,8 +1015,8 @@ export default function UploadPage() {
                   style={{ display: "flex", flexDirection: "column", gap: 8 }}
                 >
                   {[
-                    "1. File uploaded to Firebase Storage",
-                    "2. Metadata and Firebase URL saved through the backend",
+                    "1. File uploaded to Supabase Storage",
+                    "2. Metadata and Supabase URL saved through the backend",
                     "3. Uploader access registered on Injective",
                     "4. File link stays hidden until contract access is verified",
                   ].map((s, i) => (
@@ -1062,7 +1055,7 @@ export default function UploadPage() {
                     }}
                   >
                     <span style={{ fontSize: 13, color: TOKENS.textMuted }}>
-                      Uploading to Firebase Storage...
+                      Uploading to Supabase Storage...
                     </span>
                     <span
                       style={{

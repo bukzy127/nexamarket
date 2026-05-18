@@ -1,192 +1,148 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
-import type { Project } from "@/types";
+import type { Category, Project } from "@/types";
 
-interface StoreShape {
-  projects: Project[];
-  access: Record<string, number[]>;
+const PROJECTS_TABLE = "projects";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+interface ProjectRecord {
+  id: number;
+  title: string;
+  description: string;
+  category: Category;
+  price: number | string;
+  owner: string;
+  creator?: string | null;
+  rating?: number | string | null;
+  reviews?: number | null;
+  tags?: string[] | null;
+  preview: string;
+  featured?: boolean | null;
+  sales?: number | null;
+  file_url?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  storage_provider?: "supabase" | null;
+  storage_path?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const DATA_FILE = path.join(DATA_DIR, "nexamarket-store.json");
-
-const FIREBASE_PROJECT_ID =
-  process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-const FIRESTORE_TOKEN = process.env.FIRESTORE_REST_TOKEN;
-
-function useFirestore(): boolean {
-  return Boolean(FIREBASE_PROJECT_ID && FIRESTORE_TOKEN);
+function required(value: string | undefined, name: string): string {
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
+  return value;
 }
 
-function docUrl(id?: number | string): string {
-  const base = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/projects`;
-  return id ? `${base}/${id}` : base;
+function supabaseRestUrl(path: string): string {
+  return `${required(SUPABASE_URL, "NEXT_PUBLIC_SUPABASE_URL").replace(/\/$/, "")}/rest/v1/${path}`;
 }
 
-function headers(): HeadersInit {
+function supabaseHeaders(extra?: HeadersInit): HeadersInit {
+  const key = required(SUPABASE_ANON_KEY, "NEXT_PUBLIC_SUPABASE_ANON_KEY");
   return {
-    Authorization: `Bearer ${FIRESTORE_TOKEN}`,
-    "Content-Type": "application/json",
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+    ...extra,
   };
 }
 
-function s(value: string | undefined | null) {
-  return { stringValue: value ?? "" };
-}
-
-function n(value: number | undefined | null) {
-  return { doubleValue: value ?? 0 };
-}
-
-function i(value: number | undefined | null) {
-  return { integerValue: String(value ?? 0) };
-}
-
-function arr(values: string[] | undefined) {
-  return {
-    arrayValue: {
-      values: (values || []).map((value) => ({ stringValue: value })),
-    },
-  };
-}
-
-function toFirestore(project: Project) {
-  return {
-    fields: {
-      id: i(project.id),
-      title: s(project.title),
-      description: s(project.description),
-      category: s(project.category),
-      owner: s(project.owner),
-      creator: s(project.creator || project.owner),
-      price: n(project.price),
-      fileUrl: s(project.fileUrl),
-      fileName: s(project.fileName),
-      fileSize: i(project.fileSize),
-      storageProvider: s(project.storageProvider || "firebase"),
-      storagePath: s(project.storagePath),
-      tags: arr(project.tags),
-      rating: n(project.rating),
-      reviews: i(project.reviews),
-      preview: s(project.preview),
-      featured: { booleanValue: Boolean(project.featured) },
-      sales: i(project.sales),
-      createdAt: s(project.createdAt),
-      updatedAt: s(project.updatedAt),
-    },
-  };
-}
-
-function fieldString(fields: Record<string, any>, key: string): string {
-  return fields[key]?.stringValue || "";
-}
-
-function fieldNumber(fields: Record<string, any>, key: string): number {
-  const field = fields[key];
-  return Number(field?.integerValue ?? field?.doubleValue ?? 0);
-}
-
-function fromFirestore(doc: any): Project {
-  const fields = doc.fields || {};
-  return {
-    id: fieldNumber(fields, "id"),
-    title: fieldString(fields, "title"),
-    description: fieldString(fields, "description"),
-    category: fieldString(fields, "category") as Project["category"],
-    owner: fieldString(fields, "owner"),
-    creator: fieldString(fields, "creator"),
-    price: fieldNumber(fields, "price"),
-    fileUrl: fieldString(fields, "fileUrl"),
-    fileName: fieldString(fields, "fileName"),
-    fileSize: fieldNumber(fields, "fileSize"),
-    storageProvider: "firebase",
-    storagePath: fieldString(fields, "storagePath"),
-    tags:
-      fields.tags?.arrayValue?.values?.map((item: any) => item.stringValue) || [],
-    rating: fieldNumber(fields, "rating"),
-    reviews: fieldNumber(fields, "reviews"),
-    preview: fieldString(fields, "preview") || "#0d2040",
-    featured: Boolean(fields.featured?.booleanValue),
-    sales: fieldNumber(fields, "sales"),
-    createdAt: fieldString(fields, "createdAt"),
-    updatedAt: fieldString(fields, "updatedAt"),
-  };
-}
-
-async function readLocal(): Promise<StoreShape> {
+async function parseSupabaseError(res: Response): Promise<Error> {
+  const text = await res.text();
   try {
-    const raw = await readFile(DATA_FILE, "utf8");
-    return JSON.parse(raw) as StoreShape;
+    const data = JSON.parse(text) as { message?: string; error?: string };
+    return new Error(data.message || data.error || text);
   } catch {
-    return { projects: [], access: {} };
+    return new Error(text || `Supabase request failed with ${res.status}`);
   }
 }
 
-async function writeLocal(store: StoreShape) {
-  await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(DATA_FILE, JSON.stringify(store, null, 2));
+function toRecord(project: Project): ProjectRecord {
+  return {
+    id: project.id,
+    title: project.title,
+    description: project.description,
+    category: project.category,
+    price: project.price,
+    owner: project.owner,
+    creator: project.creator || project.owner,
+    rating: project.rating,
+    reviews: project.reviews,
+    tags: project.tags,
+    preview: project.preview,
+    featured: project.featured,
+    sales: project.sales,
+    file_url: project.fileUrl || null,
+    file_name: project.fileName || null,
+    file_size: project.fileSize || null,
+    storage_provider: "supabase",
+    storage_path: project.storagePath || null,
+    created_at: project.createdAt || new Date().toISOString(),
+    updated_at: project.updatedAt || new Date().toISOString(),
+  };
+}
+
+function fromRecord(record: ProjectRecord): Project {
+  return {
+    id: Number(record.id),
+    title: record.title,
+    description: record.description,
+    category: record.category,
+    price: Number(record.price),
+    owner: record.owner,
+    creator: record.creator || record.owner,
+    rating: Number(record.rating || 0),
+    reviews: Number(record.reviews || 0),
+    tags: record.tags || [],
+    preview: record.preview,
+    featured: Boolean(record.featured),
+    sales: Number(record.sales || 0),
+    fileUrl: record.file_url || undefined,
+    fileName: record.file_name || undefined,
+    fileSize: record.file_size || undefined,
+    storageProvider: "supabase",
+    storagePath: record.storage_path || undefined,
+    createdAt: record.created_at || undefined,
+    updatedAt: record.updated_at || undefined,
+  };
+}
+
+export function publicProject(project: Project): Project {
+  const { fileUrl: _fileUrl, storagePath: _storagePath, ...safeProject } = project;
+  return safeProject;
 }
 
 export async function saveProject(project: Project): Promise<Project> {
-  if (useFirestore()) {
-    const res = await fetch(docUrl(project.id), {
-      method: "PATCH",
-      headers: headers(),
-      body: JSON.stringify(toFirestore(project)),
-    });
-    if (!res.ok) throw new Error(`Firestore save failed: ${await res.text()}`);
-    return project;
-  }
+  const res = await fetch(supabaseRestUrl(`${PROJECTS_TABLE}?on_conflict=id`), {
+    method: "POST",
+    headers: supabaseHeaders({
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=representation",
+    }),
+    body: JSON.stringify([toRecord(project)]),
+  });
 
-  const store = await readLocal();
-  const nextProjects = [
-    project,
-    ...store.projects.filter((item) => item.id !== project.id),
-  ];
-  await writeLocal({ ...store, projects: nextProjects });
-  return project;
+  if (!res.ok) throw await parseSupabaseError(res);
+  const data = (await res.json()) as ProjectRecord[];
+  return fromRecord(data[0]);
 }
 
 export async function getProject(id: number): Promise<Project | null> {
-  if (useFirestore()) {
-    const res = await fetch(docUrl(id), { headers: headers() });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Firestore read failed: ${await res.text()}`);
-    return fromFirestore(await res.json());
-  }
+  const res = await fetch(
+    supabaseRestUrl(`${PROJECTS_TABLE}?id=eq.${id}&select=*&limit=1`),
+    { headers: supabaseHeaders() },
+  );
 
-  const store = await readLocal();
-  return store.projects.find((project) => project.id === id) || null;
+  if (!res.ok) throw await parseSupabaseError(res);
+  const data = (await res.json()) as ProjectRecord[];
+  return data[0] ? fromRecord(data[0]) : null;
 }
 
 export async function listProjects(): Promise<Project[]> {
-  if (useFirestore()) {
-    const res = await fetch(docUrl(), { headers: headers() });
-    if (!res.ok) throw new Error(`Firestore list failed: ${await res.text()}`);
-    const data = await res.json();
-    return (data.documents || []).map(fromFirestore);
-  }
+  const res = await fetch(
+    supabaseRestUrl(`${PROJECTS_TABLE}?select=*&order=created_at.desc`),
+    { headers: supabaseHeaders() },
+  );
 
-  const store = await readLocal();
-  return store.projects;
-}
-
-export async function grantLocalAccess(wallet: string, projectId: number) {
-  const key = wallet.toLowerCase();
-  const store = await readLocal();
-  const ids = new Set(store.access[key] || []);
-  ids.add(projectId);
-  await writeLocal({
-    ...store,
-    access: { ...store.access, [key]: Array.from(ids) },
-  });
-}
-
-export async function hasLocalAccess(
-  wallet: string,
-  project: Project,
-): Promise<boolean> {
-  if (project.owner.toLowerCase() === wallet.toLowerCase()) return true;
-  const store = await readLocal();
-  return Boolean(store.access[wallet.toLowerCase()]?.includes(project.id));
+  if (!res.ok) throw await parseSupabaseError(res);
+  const data = (await res.json()) as ProjectRecord[];
+  return data.map(fromRecord);
 }

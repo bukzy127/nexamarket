@@ -8,7 +8,7 @@ import {
   CATEGORIES,
   SORT_OPTIONS,
   type SortOption,
-} from "@/lib/mock";
+} from "@/lib/catalog";
 import type { Category } from "@/types";
 import { useProjectCatalog } from "@/hooks/useProjectCatalog";
 import ProjectCard from "@/components/ProjectCard";

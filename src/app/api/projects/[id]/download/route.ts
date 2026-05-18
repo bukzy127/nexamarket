@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { verifyWalletSignature } from "@/lib/server/auth";
 import { getProject } from "@/lib/server/projectStore";
 import { verifyProjectAccess } from "@/lib/server/injectiveAccess";
 
@@ -8,12 +9,24 @@ export async function POST(
   req: Request,
   { params }: { params: { id: string } },
 ) {
-  const { wallet } = (await req.json()) as { wallet?: string };
+  const { wallet, message, signature } = (await req.json()) as {
+    wallet?: string;
+    message?: string;
+    signature?: string;
+  };
   const id = Number(params.id);
 
   if (!wallet) {
     return NextResponse.json({ error: "wallet is required" }, { status: 400 });
   }
+  if (!message || !signature) {
+    return NextResponse.json(
+      { error: "message and signature are required" },
+      { status: 400 },
+    );
+  }
+
+  verifyWalletSignature(wallet, message, signature);
 
   const project = await getProject(id);
   if (!project) {

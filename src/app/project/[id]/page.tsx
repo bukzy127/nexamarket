@@ -6,6 +6,7 @@ import { useState } from "react";
 import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import { useProjectCatalog } from "@/hooks/useProjectCatalog";
+import { signWalletMessage } from "@/lib/wallet";
 import { purchaseProjectOnChain } from "@/lib/injectiveContract";
 import { useWalletModal } from "@/components/WalletModalProvider";
 import Card from "@/components/ui/Card";
@@ -17,7 +18,7 @@ const TX_STEPS: { label: string; icon: IconName }[] = [
   { label: "Verifying wallet", icon: "wallet" },
   { label: "Checking INJ balance", icon: "shield" },
   { label: "Transferring payment to owner", icon: "chain" },
-  { label: "Unlocking Firebase file link", icon: "check" },
+  { label: "Unlocking Supabase file link", icon: "check" },
 ];
 
 const TABS = ["overview", "files", "history", "reviews"] as const;
@@ -65,6 +66,9 @@ export default function ProjectDetailPage() {
 
   const currentProject = project;
   const isOwned = purchased || hasAccess(currentProject);
+  const updatedAt = project.updatedAt
+    ? new Date(project.updatedAt).toLocaleDateString()
+    : "Real data will appear after upload.";
 
   const wait = (ms: number) =>
     new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -75,10 +79,12 @@ export default function ProjectDetailPage() {
       return null;
     }
 
+    const message = `NexaMarket download\nWallet: ${wallet.address}\nProject: ${currentProject.id}`;
+    const signature = await signWalletMessage(message);
     const res = await fetch(`/api/projects/${currentProject.id}/download`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet: wallet.address }),
+      body: JSON.stringify({ wallet: wallet.address, message, signature }),
     });
 
     if (!res.ok) {
@@ -108,16 +114,19 @@ export default function ProjectDetailPage() {
       setTxStep(1);
       await wait(650);
       setTxStep(2);
-      const chain = await purchaseProjectOnChain(
-        currentProject,
-        buyer,
-        wallet.balance,
-      );
+      const chain = await purchaseProjectOnChain(currentProject);
+      const purchaseMessage = `NexaMarket purchase\nWallet: ${buyer}\nProject: ${currentProject.id}\nTx: ${chain.txHash}`;
+      const purchaseSignature = await signWalletMessage(purchaseMessage);
 
       const purchaseRes = await fetch(`/api/projects/${currentProject.id}/purchase`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: buyer, txHash: chain.txHash }),
+        body: JSON.stringify({
+          wallet: buyer,
+          txHash: chain.txHash,
+          message: purchaseMessage,
+          signature: purchaseSignature,
+        }),
       });
       if (!purchaseRes.ok) {
         const data = (await purchaseRes.json().catch(() => ({}))) as {
@@ -128,7 +137,7 @@ export default function ProjectDetailPage() {
 
       await wait(650);
       setTxStep(3);
-      markPurchased(currentProject.id);
+      markPurchased();
       setPurchased(true);
       await requestVerifiedDownload(false);
       await wallet.refreshBalance();
@@ -451,29 +460,11 @@ export default function ProjectDetailPage() {
                       </span>
                     </div>
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                      {Array.from({ length: 5 }).map((_, j) => (
-                        <Icon
-                          key={j}
-                          name="star"
-                          size={13}
-                          color={
-                            j < Math.floor(project.rating)
-                              ? TOKENS.gold
-                              : TOKENS.textDim
-                          }
-                        />
-                      ))}
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          marginLeft: 4,
-                        }}
-                      >
-                        {project.rating}
-                      </span>
+                      <Icon name="star" size={13} color={TOKENS.gold} />
                       <span style={{ fontSize: 13, color: TOKENS.textMuted }}>
-                        ({project.reviews})
+                        {project.reviews > 0
+                          ? `${project.rating} (${project.reviews})`
+                          : "No reviews yet"}
                       </span>
                     </div>
                     <div
@@ -485,7 +476,7 @@ export default function ProjectDetailPage() {
                     >
                       <Icon name="download" size={13} color={TOKENS.textMuted} />
                       <span style={{ fontSize: 13, color: TOKENS.textMuted }}>
-                        {project.sales} sold
+                        {project.sales > 0 ? `${project.sales} sold` : "No sales yet"}
                       </span>
                     </div>
                   </div>
@@ -576,7 +567,7 @@ export default function ProjectDetailPage() {
                   }}
                 >
                   This asset package includes all drawing files, documentation,
-                  and associated data. Files are currently stored in Firebase
+                  and associated data. Files are currently stored in Supabase
                   Storage, and the saved file link is only revealed after this
                   wallet owns or purchases the listing.
                 </p>
@@ -593,12 +584,12 @@ export default function ProjectDetailPage() {
                       label: "File Size",
                       value: project.fileSize
                         ? `${(project.fileSize / 1024 / 1024).toFixed(2)} MB`
-                        : "~48 MB",
+                        : "Real data will appear after upload.",
                     },
-                    { label: "License", value: "Commercial" },
-                    { label: "Last Updated", value: "Apr 2026" },
+                    { label: "License", value: "This feature is not available yet." },
+                    { label: "Last Updated", value: updatedAt },
                     { label: "Blockchain", value: "Injective" },
-                    { label: "Storage", value: "Firebase Storage" },
+                    { label: "Storage", value: "Supabase Storage" },
                     {
                       label: "Asset ID",
                       value: `#${String(project.id).padStart(5, "0")}`,
@@ -671,7 +662,7 @@ export default function ProjectDetailPage() {
                             marginBottom: 8,
                           }}
                         >
-                          Contract-verified Firebase file link
+                          Contract-verified Supabase file link
                         </div>
                         <div
                           style={{
@@ -691,7 +682,7 @@ export default function ProjectDetailPage() {
                           icon="download"
                           onClick={() => window.open(securedFileUrl, "_blank")}
                         >
-                          Open Firebase File
+                          Open Supabase File
                         </Btn>
                       </div>
                     )}
@@ -769,186 +760,20 @@ export default function ProjectDetailPage() {
                 <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>
                   Ownership History
                 </h3>
-                {[
-                  {
-                    addr: project.owner,
-                    action: "Created & Listed",
-                    date: "Feb 12, 2026",
-                    tx: "0xabc1...def2",
-                  },
-                  {
-                    addr: "0x7Fa2...3bC1",
-                    action: "Purchased",
-                    date: "Mar 4, 2026",
-                    tx: "0x9d3f...1a2b",
-                  },
-                  {
-                    addr: "0xE5a1...8dF4",
-                    action: "Resold",
-                    date: "Apr 18, 2026",
-                    tx: "0x2c7e...9f0a",
-                  },
-                ].map((h, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 16,
-                      padding: "16px 0",
-                      borderBottom: i < 2 ? `1px solid ${TOKENS.border}` : "none",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        background:
-                          "linear-gradient(135deg, rgba(0,212,255,0.15), rgba(124,58,237,0.15))",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Icon
-                        name={i === 0 ? "upload" : "download"}
-                        size={16}
-                        color={TOKENS.cyan}
-                      />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
-                        {h.action}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: TOKENS.textMuted,
-                          fontFamily: "var(--font-mono), monospace",
-                        }}
-                      >
-                        {h.addr}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: TOKENS.textMuted,
-                          marginBottom: 4,
-                        }}
-                      >
-                        {h.date}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: TOKENS.textDim,
-                          fontFamily: "var(--font-mono), monospace",
-                        }}
-                      >
-                        {h.tx}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                <p style={{ color: TOKENS.textMuted, fontSize: 14, margin: 0 }}>
+                  Real data will appear after transactions are completed.
+                </p>
               </Card>
             )}
 
             {activeTab === "reviews" && (
               <Card style={{ padding: "28px 32px" }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>
-                  Reviews ({project.reviews})
+                  Reviews
                 </h3>
-                {[
-                  {
-                    addr: "0xD1f2...9aE3",
-                    text: "Exceptional drawing quality. All details coordinated and clash-free. Saved our team weeks of drafting.",
-                    rating: 5,
-                    date: "Apr 2026",
-                  },
-                  {
-                    addr: "inj1m3p...k7ql",
-                    text: "Exactly what we needed for our tender submission. Fully compliant with current standards.",
-                    rating: 5,
-                    date: "Mar 2026",
-                  },
-                  {
-                    addr: "0x5B3c...2fA0",
-                    text: "Good package overall. Minor annotation issues but the seller responded quickly with an updated file.",
-                    rating: 4,
-                    date: "Feb 2026",
-                  },
-                ].map((r, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: "20px 0",
-                      borderBottom: i < 2 ? `1px solid ${TOKENS.border}` : "none",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        marginBottom: 10,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: "50%",
-                          background:
-                            "linear-gradient(135deg, #00d4ff44, #7c3aed44)",
-                        }}
-                      />
-                      <div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            fontFamily: "var(--font-mono), monospace",
-                            color: TOKENS.textMuted,
-                          }}
-                        >
-                          {r.addr}
-                        </div>
-                        <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
-                          {Array.from({ length: 5 }).map((_, j) => (
-                            <Icon
-                              key={j}
-                              name="star"
-                              size={12}
-                              color={j < r.rating ? TOKENS.gold : TOKENS.textDim}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <span
-                        style={{
-                          marginLeft: "auto",
-                          fontSize: 12,
-                          color: TOKENS.textDim,
-                        }}
-                      >
-                        {r.date}
-                      </span>
-                    </div>
-                    <p
-                      style={{
-                        fontSize: 14,
-                        color: TOKENS.textMuted,
-                        lineHeight: 1.6,
-                        margin: 0,
-                      }}
-                    >
-                      {r.text}
-                    </p>
-                  </div>
-                ))}
+                <p style={{ color: TOKENS.textMuted, fontSize: 14, margin: 0 }}>
+                  This feature is not available yet.
+                </p>
               </Card>
             )}
           </div>
@@ -994,7 +819,7 @@ export default function ProjectDetailPage() {
                   marginBottom: 24,
                 }}
               >
-                ≈ ${(project.price * 22.4).toFixed(2)} USD
+                Paid directly to the project owner on-chain.
               </div>
 
               {isOwned ? (
@@ -1077,7 +902,7 @@ export default function ProjectDetailPage() {
                 {(
                   [
                     { icon: "shield", text: "On-chain ownership transfer" },
-                    { icon: "chain", text: "Firebase link gated by ownership" },
+                    { icon: "chain", text: "Supabase link gated by ownership" },
                     { icon: "download", text: "Lifetime download access" },
                     { icon: "check", text: "Commercial use license" },
                     { icon: "blueprint", text: "CAD + PDF formats included" },

@@ -53,7 +53,7 @@ const FUTURE_TOKEN_FEATURES: { icon: IconName; text: string }[] = [
   { icon: "zap", text: "Zero-fee asset purchases within NexaMarket" },
   { icon: "shield", text: "Governance voting on platform upgrades" },
   { icon: "trending", text: "Staking rewards from marketplace fees" },
-  { icon: "chain", text: "Built on Injective CosmWasm" },
+  { icon: "chain", text: "Built on Injective EVM" },
 ];
 
 export default function MarketsPage() {

@@ -1,29 +1,26 @@
+import { Contract, JsonRpcProvider } from "ethers";
 import type { Project } from "@/types";
-import { hasLocalAccess } from "./projectStore";
+import { NEXA_MARKET_ACCESS_ABI } from "@/lib/contractAbi";
 
-interface AccessQueryResponse {
-  data?: {
-    has_access?: boolean;
-  };
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_MARKETPLACE_CONTRACT;
+const RPC_URL =
+  process.env.INJECTIVE_EVM_RPC_URL ||
+  "https://k8s.testnet.json-rpc.injective.network/";
+
+function requireContractAddress(): string {
+  if (!CONTRACT_ADDRESS) {
+    throw new Error("NEXT_PUBLIC_MARKETPLACE_CONTRACT is not configured.");
+  }
+  return CONTRACT_ADDRESS;
 }
 
-const CONTRACT_ADDRESS =
-  process.env.MARKETPLACE_CONTRACT ||
-  process.env.NEXT_PUBLIC_MARKETPLACE_CONTRACT;
-
-const LCD_URL =
-  process.env.INJECTIVE_LCD_URL ||
-  (process.env.NEXT_PUBLIC_INJECTIVE_NETWORK === "mainnet"
-    ? "https://sentry.lcd.injective.network"
-    : "https://testnet.sentry.lcd.injective.network");
-
-export function hasContractConfig(): boolean {
-  return Boolean(CONTRACT_ADDRESS && LCD_URL);
-}
-
-function smartQueryUrl(query: object): string {
-  const encoded = Buffer.from(JSON.stringify(query), "utf8").toString("base64");
-  return `${LCD_URL}/cosmwasm/wasm/v1/contract/${CONTRACT_ADDRESS}/smart/${encoded}`;
+function contract() {
+  const provider = new JsonRpcProvider(RPC_URL);
+  return new Contract(
+    requireContractAddress(),
+    NEXA_MARKET_ACCESS_ABI,
+    provider,
+  );
 }
 
 export async function verifyProjectAccess(
@@ -31,25 +28,6 @@ export async function verifyProjectAccess(
   project: Project,
 ): Promise<boolean> {
   if (!wallet) return false;
-
-  if (!hasContractConfig()) {
-    return hasLocalAccess(wallet, project);
-  }
-
-  const res = await fetch(
-    smartQueryUrl({
-      has_access: {
-        project_id: String(project.id),
-        wallet,
-      },
-    }),
-    { cache: "no-store" },
-  );
-
-  if (!res.ok) {
-    throw new Error(`Injective access query failed: ${await res.text()}`);
-  }
-
-  const body = (await res.json()) as AccessQueryResponse;
-  return Boolean(body.data?.has_access);
+  const marketplace = contract();
+  return marketplace.hasAccess(BigInt(project.id), wallet);
 }

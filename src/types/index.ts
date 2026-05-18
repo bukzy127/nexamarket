@@ -9,7 +9,7 @@ export type Category =
   | "Survey & Geotechnical";
 
 export interface Project {
-  /** Numeric id used by the design / mock layer. */
+  /** Numeric id also used as the on-chain project id. */
   id: number;
   title: string;
   description: string;
@@ -27,13 +27,11 @@ export interface Project {
   preview: string;
   featured: boolean;
   sales: number;
-  /** Legacy IPFS CID field, kept for later if IPFS is re-enabled. */
-  cid?: string;
-  /** Firebase Storage download URL for the private project package. */
+  /** Server-only Supabase Storage download URL for the private project package. */
   fileUrl?: string;
   fileName?: string;
   fileSize?: number;
-  storageProvider?: "firebase";
+  storageProvider?: "supabase";
   storagePath?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -57,7 +55,7 @@ export interface UserProfile {
   createdAt: string;
 }
 
-export type WalletType = "keplr" | "leap" | "metamask";
+export type WalletType = "metamask";
 
 export interface WalletState {
   address: string | null;
