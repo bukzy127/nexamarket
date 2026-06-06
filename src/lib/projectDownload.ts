@@ -7,6 +7,34 @@ export interface VerifiedDownloadResult {
   fileName?: string;
 }
 
+function filenameFromUrl(fileUrl: string): string {
+  try {
+    const url = new URL(fileUrl);
+    const lastPart = url.pathname.split("/").filter(Boolean).pop();
+    return lastPart ? decodeURIComponent(lastPart) : "nexamarket-download";
+  } catch {
+    return "nexamarket-download";
+  }
+}
+
+export async function triggerBrowserDownload(fileUrl: string, fileName?: string) {
+  const res = await fetch(fileUrl);
+  if (!res.ok) {
+    throw new Error("The verified file could not be downloaded.");
+  }
+
+  const blob = await res.blob();
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName || filenameFromUrl(fileUrl);
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
 export async function requestVerifiedProjectDownload(
   projectId: number,
   wallet: string,
@@ -42,6 +70,6 @@ export async function openVerifiedProjectDownload(
   wallet: string,
 ): Promise<VerifiedDownloadResult> {
   const download = await requestVerifiedProjectDownload(projectId, wallet);
-  window.open(download.fileUrl, "_blank", "noopener,noreferrer");
+  await triggerBrowserDownload(download.fileUrl, download.fileName);
   return download;
 }

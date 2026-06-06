@@ -15,6 +15,7 @@ import {
 import {
   openVerifiedProjectDownload,
   requestVerifiedProjectDownload,
+  triggerBrowserDownload,
 } from "@/lib/projectDownload";
 import { useWalletModal } from "@/components/WalletModalProvider";
 import Card from "@/components/ui/Card";
@@ -701,9 +702,14 @@ export default function ProjectDetailPage() {
                           variant="green"
                           size="sm"
                           icon="download"
-                          onClick={() => window.open(securedFileUrl, "_blank")}
+                          onClick={() => {
+                            void triggerBrowserDownload(
+                              securedFileUrl,
+                              project.fileName,
+                            );
+                          }}
                         >
-                          Open Supabase File
+                          Download Supabase File
                         </Btn>
                       </div>
                     )}
