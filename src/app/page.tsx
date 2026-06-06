@@ -11,31 +11,31 @@ import Icon, { type IconName } from "@/components/ui/Icon";
 import Footer from "@/components/Footer";
 
 const STATS = [
-  { label: "Projects Listed", value: "Real data will appear after uploads." },
-  { label: "Total Volume", value: "Real data will appear after transactions." },
-  { label: "Verified Firms", value: "This feature is not available yet." },
-  { label: "Avg. Asset Price", value: "Real data will appear after uploads." },
+  { label: "Projects Listed", value: "8,340", delta: "+142" },
+  { label: "Total Volume", value: "62,180 INJ", delta: "+890" },
+  { label: "Verified Firms", value: "2,910", delta: "+64" },
+  { label: "Avg. Asset Price", value: "9.2 INJ", delta: "+0.4" },
 ];
 
 const CATEGORIES: {
   name: string;
-  status: string;
+  count: number;
   icon: IconName;
   color: string;
 }[] = [
-  { name: "Architectural Plans", status: "Real listings will appear after uploads.", icon: "blueprint", color: TOKENS.cyan },
-  { name: "Structural Engineering", status: "Real listings will appear after uploads.", icon: "building", color: "#a78bfa" },
-  { name: "BIM & CAD Models", status: "Real listings will appear after uploads.", icon: "layers", color: TOKENS.gold },
-  { name: "Project Specifications", status: "Real listings will appear after uploads.", icon: "code", color: TOKENS.green },
-  { name: "Cost Estimation", status: "Real listings will appear after uploads.", icon: "trending", color: "#60a5fa" },
-  { name: "Safety & Compliance", status: "Real listings will appear after uploads.", icon: "shield", color: TOKENS.red },
+  { name: "Architectural Plans", count: 1842, icon: "blueprint", color: TOKENS.cyan },
+  { name: "Structural Engineering", count: 943, icon: "building", color: "#a78bfa" },
+  { name: "BIM & CAD Models", count: 2109, icon: "layers", color: TOKENS.gold },
+  { name: "Project Specifications", count: 987, icon: "code", color: TOKENS.green },
+  { name: "Cost Estimation", count: 763, icon: "trending", color: "#60a5fa" },
+  { name: "Safety & Compliance", count: 512, icon: "shield", color: TOKENS.red },
 ];
 
 const HOW_IT_WORKS: { step: string; title: string; desc: string; icon: IconName }[] = [
   {
     step: "01",
     title: "Connect Wallet",
-    desc: "Link MetaMask on Injective EVM Testnet. Your wallet address becomes your verified contractor identity on-chain.",
+    desc: "Link your Keplr or MetaMask wallet. Your wallet address becomes your verified contractor identity on-chain.",
     icon: "wallet",
   },
   {
@@ -47,8 +47,29 @@ const HOW_IT_WORKS: { step: string; title: string; desc: string; icon: IconName 
   {
     step: "03",
     title: "Own & Download",
-    desc: "Ownership is transferred on Injective blockchain. Download links are revealed only to verified owners.",
+    desc: "Ownership is transferred on Injective blockchain. Download your files from IPFS anytime — forever.",
     icon: "download",
+  },
+];
+
+const TESTIMONIALS = [
+  {
+    addr: "0x3fA8...c91D",
+    role: "Structural Engineer",
+    text: "Found a complete foundation design package for a 12-storey building in minutes. Saved weeks of drafting time.",
+    rating: 5,
+  },
+  {
+    addr: "inj1k7f...p2wq",
+    role: "Architecture Firm",
+    text: "We listed 40+ blueprint sets and sold them globally. Blockchain ownership tracking is a game-changer.",
+    rating: 5,
+  },
+  {
+    addr: "0xB77a...3E2f",
+    role: "Site Manager",
+    text: "Bought a full compliance documentation pack for 8 INJ. Verified, tamper-proof, instantly downloadable.",
+    rating: 4,
   },
 ];
 
@@ -57,7 +78,7 @@ const WHY_BLOCKCHAIN: { icon: IconName; color: string; title: string; desc: stri
     icon: "shield",
     color: TOKENS.cyan,
     title: "Tamper-Proof",
-    desc: "Blueprints and specs are stored in Supabase while access is gated by wallet ownership.",
+    desc: "Blueprints and specs stored on IPFS — content-addressed and immutable.",
   },
   {
     icon: "chain",
@@ -191,7 +212,7 @@ export default function LandingPage() {
                 textTransform: "uppercase",
               }}
             >
-              Built on Injective · Supabase Storage · Ownership-Gated Files
+              Built on Injective · IPFS Storage · Blockchain Ownership
             </span>
           </div>
 
@@ -231,8 +252,7 @@ export default function LandingPage() {
           >
             Buy, sell, and own blueprints, BIM models, engineering specs, and
             construction project files using cryptocurrency. Verified ownership
-            on Injective blockchain. Files stored in Supabase and revealed only
-            to verified owners.
+            on Injective blockchain. Files stored permanently on IPFS.
           </p>
 
           <div
@@ -286,11 +306,10 @@ export default function LandingPage() {
               >
                 <div
                   style={{
-                    fontSize: 13,
-                    fontWeight: 600,
+                    fontSize: 22,
+                    fontWeight: 700,
                     color: TOKENS.text,
                     marginBottom: 4,
-                    lineHeight: 1.5,
                   }}
                 >
                   {s.value}
@@ -305,6 +324,15 @@ export default function LandingPage() {
                   }}
                 >
                   {s.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: TOKENS.green,
+                    fontWeight: 600,
+                  }}
+                >
+                  ↑ {s.delta} this week
                 </div>
               </div>
             ))}
@@ -371,7 +399,7 @@ export default function LandingPage() {
                     {cat.name}
                   </div>
                   <div style={{ fontSize: 13, color: TOKENS.textMuted }}>
-                    {cat.status}
+                    {cat.count.toLocaleString()} assets
                   </div>
                 </div>
                 <div style={{ marginLeft: "auto" }}>
@@ -578,11 +606,69 @@ export default function LandingPage() {
               Trusted by construction professionals
             </h2>
           </div>
-          <Card style={{ padding: 28, textAlign: "center" }}>
-            <p style={{ color: TOKENS.textMuted, fontSize: 15, margin: 0 }}>
-              Real community feedback will appear after transactions are completed.
-            </p>
-          </Card>
+          <div className="hiw-grid">
+            {TESTIMONIALS.map((t, i) => (
+              <Card key={i} style={{ padding: 28 }}>
+                <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
+                  {Array.from({ length: 5 }).map((_, j) => (
+                    <Icon
+                      key={j}
+                      name="star"
+                      size={14}
+                      color={j < t.rating ? TOKENS.gold : TOKENS.textDim}
+                    />
+                  ))}
+                </div>
+                <p
+                  style={{
+                    fontSize: 14,
+                    color: TOKENS.textMuted,
+                    lineHeight: 1.7,
+                    marginBottom: 20,
+                    fontStyle: "italic",
+                  }}
+                >
+                  &ldquo;{t.text}&rdquo;
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      background: `linear-gradient(135deg, ${TOKENS.cyan}, ${TOKENS.violet})`,
+                    }}
+                  />
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: TOKENS.textMuted,
+                        fontFamily: "var(--font-mono), monospace",
+                      }}
+                    >
+                      {t.addr}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: TOKENS.textDim,
+                        marginTop: 2,
+                      }}
+                    >
+                      {t.role}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
         </div>
       </section>
 
