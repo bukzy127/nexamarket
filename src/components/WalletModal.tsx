@@ -112,7 +112,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
                 transition: "all 0.2s",
               }}
             >
-              <div
+              <span
                 style={{
                   width: 40,
                   height: 40,
@@ -126,10 +126,11 @@ export default function WalletModal({ onClose }: WalletModalProps) {
                 }}
               >
                 <Icon name="wallet" size={20} color={w.color} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div
+              </span>
+              <span style={{ flex: 1 }}>
+                <span
                   style={{
+                    display: "block",
                     fontSize: 15,
                     fontWeight: 600,
                     color: TOKENS.text,
@@ -137,13 +138,19 @@ export default function WalletModal({ onClose }: WalletModalProps) {
                   }}
                 >
                   {w.name}
-                </div>
-                <div style={{ fontSize: 12, color: TOKENS.textMuted }}>
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 12,
+                    color: TOKENS.textMuted,
+                  }}
+                >
                   {w.desc}
-                </div>
-              </div>
+                </span>
+              </span>
               {connecting === w.id && (
-                <div
+                <span
                   style={{
                     width: 20,
                     height: 20,

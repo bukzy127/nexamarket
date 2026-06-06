@@ -35,11 +35,21 @@ export async function POST(
 
   const hasAccess = await verifyProjectAccess(wallet, project);
   if (!hasAccess) {
-    return NextResponse.json({ error: "access denied" }, { status: 403 });
+    return NextResponse.json(
+      { error: "You must purchase this project before downloading." },
+      { status: 403 },
+    );
+  }
+  if (!project.fileUrl) {
+    return NextResponse.json(
+      { error: "project file URL is missing" },
+      { status: 404 },
+    );
   }
 
   return NextResponse.json({
     fileUrl: project.fileUrl,
+    downloadUrl: project.fileUrl,
     fileName: project.fileName,
     storagePath: project.storagePath,
   });

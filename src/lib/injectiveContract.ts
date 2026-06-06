@@ -3,7 +3,11 @@
 import { ethers } from "ethers";
 import type { Project } from "@/types";
 import { NEXA_MARKET_ACCESS_ABI } from "@/lib/contractAbi";
-import { ensureInjectiveNetwork, getBrowserProvider } from "@/lib/wallet";
+import {
+  ensureInjectiveNetwork,
+  getBrowserProvider,
+  INJECTIVE_EVM_TESTNET,
+} from "@/lib/wallet";
 
 export interface ChainTxResult {
   txHash: string;
@@ -28,6 +32,15 @@ async function signerContract() {
     requireContractAddress(),
     NEXA_MARKET_ACCESS_ABI,
     signer,
+  );
+}
+
+function readOnlyContract() {
+  const provider = new ethers.JsonRpcProvider(INJECTIVE_EVM_TESTNET.rpcUrls[0]);
+  return new ethers.Contract(
+    requireContractAddress(),
+    NEXA_MARKET_ACCESS_ABI,
+    provider,
   );
 }
 
@@ -60,4 +73,12 @@ export async function purchaseProjectOnChain(
   });
   const receipt = await tx.wait();
   return { txHash: receipt?.hash || tx.hash };
+}
+
+export async function hasProjectAccessOnChain(
+  projectId: number,
+  wallet: string,
+): Promise<boolean> {
+  const marketplace = readOnlyContract();
+  return marketplace.hasAccess(BigInt(projectId), wallet);
 }

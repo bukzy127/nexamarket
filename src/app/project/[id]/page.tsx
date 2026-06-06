@@ -3,11 +3,19 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import toast from "react-hot-toast";
 import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import { useProjectCatalog } from "@/hooks/useProjectCatalog";
 import { signWalletMessage } from "@/lib/wallet";
-import { purchaseProjectOnChain } from "@/lib/injectiveContract";
+import {
+  hasProjectAccessOnChain,
+  purchaseProjectOnChain,
+} from "@/lib/injectiveContract";
+import {
+  openVerifiedProjectDownload,
+  requestVerifiedProjectDownload,
+} from "@/lib/projectDownload";
 import { useWalletModal } from "@/components/WalletModalProvider";
 import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
@@ -79,29 +87,42 @@ export default function ProjectDetailPage() {
       return null;
     }
 
-    const message = `NexaMarket download\nWallet: ${wallet.address}\nProject: ${currentProject.id}`;
-    const signature = await signWalletMessage(message);
-    const res = await fetch(`/api/projects/${currentProject.id}/download`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet: wallet.address, message, signature }),
-    });
-
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(data.error || "Download access could not be verified.");
+    try {
+      const download = openFile
+        ? await openVerifiedProjectDownload(currentProject.id, wallet.address)
+        : await requestVerifiedProjectDownload(currentProject.id, wallet.address);
+      setSecuredFileUrl(download.fileUrl);
+      return download.fileUrl;
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Download access could not be verified.";
+      toast.error(message);
+      return null;
     }
-
-    const data = (await res.json()) as { fileUrl?: string };
-    setSecuredFileUrl(data.fileUrl || null);
-    if (openFile && data.fileUrl) window.open(data.fileUrl, "_blank");
-    return data.fileUrl || null;
   }
 
   async function handleBuy() {
     const buyer = wallet.address;
     if (!wallet.connected || !buyer) {
       openWallet();
+      return;
+    }
+
+    try {
+      if (await hasProjectAccessOnChain(currentProject.id, buyer)) {
+        setPurchased(true);
+        markPurchased();
+        await requestVerifiedDownload(true);
+        return;
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Unable to verify existing access.",
+      );
       return;
     }
 
@@ -875,7 +896,7 @@ export default function ProjectDetailPage() {
                     icon="zap"
                     size="lg"
                   >
-                    {wallet.connected ? "Download / Purchase" : "Connect Wallet"}
+                    {wallet.connected ? "Buy / Purchase" : "Connect Wallet"}
                   </Btn>
                   <div
                     style={{

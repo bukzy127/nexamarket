@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Category, Project } from "@/types";
+import { hasProjectAccessOnChain } from "@/lib/injectiveContract";
 
 const CATALOG_EVENT = "nexamarket:catalog-updated";
 
@@ -62,6 +63,9 @@ export function createUploadedProject(input: UploadedProjectInput): Project {
 
 export function useProjectCatalog(walletAddress?: string | null) {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [accessibleProjectIds, setAccessibleProjectIds] = useState<Set<number>>(
+    () => new Set(),
+  );
 
   const refresh = useCallback(() => {
     void fetch("/api/projects")
@@ -80,6 +84,37 @@ export function useProjectCatalog(walletAddress?: string | null) {
 
   const walletKey = normalizeAddress(walletAddress);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!walletKey || projects.length === 0) {
+      setAccessibleProjectIds(new Set());
+      return;
+    }
+
+    void Promise.all(
+      projects.map(async (project) => {
+        if (normalizeAddress(project.owner) === walletKey) return project.id;
+        try {
+          return (await hasProjectAccessOnChain(project.id, walletAddress!))
+            ? project.id
+            : null;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((ids) => {
+      if (!cancelled) {
+        setAccessibleProjectIds(
+          new Set(ids.filter((id): id is number => typeof id === "number")),
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projects, walletAddress, walletKey]);
+
   const addProject = useCallback((project: Project) => {
     setProjects((current) => [publicCopy(project), ...current]);
     window.dispatchEvent(new Event(CATALOG_EVENT));
@@ -92,9 +127,12 @@ export function useProjectCatalog(walletAddress?: string | null) {
   const hasAccess = useCallback(
     (project: Project | undefined) => {
       if (!project || !walletKey) return false;
-      return normalizeAddress(project.owner) === walletKey;
+      return (
+        normalizeAddress(project.owner) === walletKey ||
+        accessibleProjectIds.has(project.id)
+      );
     },
-    [walletKey],
+    [accessibleProjectIds, walletKey],
   );
 
   const ownedProjects = useMemo(

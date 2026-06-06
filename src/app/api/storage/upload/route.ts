@@ -7,12 +7,59 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SUPABASE_BUCKET =
   process.env.NEXT_PUBLIC_SUPABASE_BUCKET || "project-files";
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function slugify(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 96);
+}
+
+function isTemporarySupabaseTimeout(status: number, body: string): boolean {
+  return status === 544 || body.includes("DatabaseTimeout");
+}
+
+async function uploadToSupabase(
+  uploadUrl: string,
+  bytes: ArrayBuffer,
+  contentType: string,
+) {
+  let lastBody = "";
+  let lastStatus = 0;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const uploadRes = await fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY!,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": contentType,
+        "x-upsert": "false",
+      },
+      body: bytes,
+    });
+
+    if (uploadRes.ok) return;
+
+    lastStatus = uploadRes.status;
+    lastBody = await uploadRes.text();
+    if (!isTemporarySupabaseTimeout(lastStatus, lastBody) || attempt === 2) {
+      break;
+    }
+    await wait(1500 * (attempt + 1));
+  }
+
+  throw new Error(
+    `Supabase upload failed: ${
+      isTemporarySupabaseTimeout(lastStatus, lastBody)
+        ? "Supabase is still waking up. Please wait one minute and try again."
+        : lastBody
+    }`,
+  );
 }
 
 export async function POST(req: Request) {
@@ -35,6 +82,10 @@ export async function POST(req: Request) {
     }
 
     const bytes = Buffer.from(await file.arrayBuffer());
+    const uploadBody = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ) as ArrayBuffer;
     const safeName = slugify(file.name) || "project-file";
     const safeOwner = slugify(owner);
     const storagePath = `project-assets/${safeOwner}/${Date.now()}-${safeName}`;
@@ -42,20 +93,11 @@ export async function POST(req: Request) {
     const baseUrl = SUPABASE_URL.replace(/\/$/, "");
     const uploadUrl = `${baseUrl}/storage/v1/object/${SUPABASE_BUCKET}/${encodedPath}`;
 
-    const uploadRes = await fetch(uploadUrl, {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        "Content-Type": file.type || "application/octet-stream",
-        "x-upsert": "false",
-      },
-      body: bytes,
-    });
-
-    if (!uploadRes.ok) {
-      throw new Error(`Supabase upload failed: ${await uploadRes.text()}`);
-    }
+    await uploadToSupabase(
+      uploadUrl,
+      uploadBody,
+      file.type || "application/octet-stream",
+    );
 
     return NextResponse.json({
       url: `${baseUrl}/storage/v1/object/public/${SUPABASE_BUCKET}/${encodedPath}`,

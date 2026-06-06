@@ -45,8 +45,37 @@ function supabaseHeaders(extra?: HeadersInit): HeadersInit {
   };
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTemporarySupabaseTimeout(status: number, body: string): boolean {
+  return status === 544 || body.includes("DatabaseTimeout");
+}
+
+async function supabaseFetch(path: string, init?: RequestInit): Promise<Response> {
+  let lastRes: Response | null = null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const res = await fetch(supabaseRestUrl(path), init);
+    if (res.ok) return res;
+
+    const body = await res.clone().text();
+    lastRes = res;
+    if (!isTemporarySupabaseTimeout(res.status, body) || attempt === 2) {
+      return res;
+    }
+    await wait(1500 * (attempt + 1));
+  }
+
+  return lastRes!;
+}
+
 async function parseSupabaseError(res: Response): Promise<Error> {
   const text = await res.text();
+  if (isTemporarySupabaseTimeout(res.status, text)) {
+    return new Error("Supabase is still waking up. Please wait one minute and try again.");
+  }
   try {
     const data = JSON.parse(text) as { message?: string; error?: string };
     return new Error(data.message || data.error || text);
@@ -111,7 +140,7 @@ export function publicProject(project: Project): Project {
 }
 
 export async function saveProject(project: Project): Promise<Project> {
-  const res = await fetch(supabaseRestUrl(`${PROJECTS_TABLE}?on_conflict=id`), {
+  const res = await supabaseFetch(`${PROJECTS_TABLE}?on_conflict=id`, {
     method: "POST",
     headers: supabaseHeaders({
       "Content-Type": "application/json",
@@ -126,8 +155,8 @@ export async function saveProject(project: Project): Promise<Project> {
 }
 
 export async function getProject(id: number): Promise<Project | null> {
-  const res = await fetch(
-    supabaseRestUrl(`${PROJECTS_TABLE}?id=eq.${id}&select=*&limit=1`),
+  const res = await supabaseFetch(
+    `${PROJECTS_TABLE}?id=eq.${id}&select=*&limit=1`,
     { headers: supabaseHeaders() },
   );
 
@@ -137,8 +166,8 @@ export async function getProject(id: number): Promise<Project | null> {
 }
 
 export async function listProjects(): Promise<Project[]> {
-  const res = await fetch(
-    supabaseRestUrl(`${PROJECTS_TABLE}?select=*&order=created_at.desc`),
+  const res = await supabaseFetch(
+    `${PROJECTS_TABLE}?select=*&order=created_at.desc`,
     { headers: supabaseHeaders() },
   );
 

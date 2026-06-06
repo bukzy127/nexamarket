@@ -8,6 +8,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { useWalletModal } from "@/components/WalletModalProvider";
 import { useProjectCatalog } from "@/hooks/useProjectCatalog";
 import { shortAddress } from "@/lib/wallet";
+import { openVerifiedProjectDownload } from "@/lib/projectDownload";
 import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
 import Badge from "@/components/ui/Badge";
@@ -31,6 +32,7 @@ export default function DashboardPage() {
   const { ownedProjects } = useProjectCatalog(wallet.address);
   const router = useRouter();
   const [active, setActive] = useState<Section>("overview");
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   if (!wallet.connected) {
     return (
@@ -102,6 +104,26 @@ export default function DashboardPage() {
     if (wallet.address) {
       void navigator.clipboard.writeText(wallet.address);
       toast.success("Address copied");
+    }
+  }
+
+  async function handleDownload(projectId: number) {
+    if (!wallet.address) {
+      openWallet();
+      return;
+    }
+
+    setDownloadingId(projectId);
+    try {
+      await openVerifiedProjectDownload(projectId, wallet.address);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Download access could not be verified.",
+      );
+    } finally {
+      setDownloadingId(null);
     }
   }
 
@@ -689,12 +711,20 @@ export default function DashboardPage() {
                           {p.category}
                         </div>
                       </div>
-                      <Btn
-                        variant="ghost"
-                        size="sm"
-                        icon="download"
-                        style={{ padding: "6px 8px" }}
-                      />
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDownload(p.id);
+                        }}
+                      >
+                        <Btn
+                          variant="ghost"
+                          size="sm"
+                          icon="download"
+                          disabled={downloadingId === p.id}
+                          style={{ padding: "6px 8px" }}
+                        />
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -768,9 +798,13 @@ export default function DashboardPage() {
                         variant="green"
                         size="sm"
                         icon="download"
+                        onClick={() => {
+                          void handleDownload(p.id);
+                        }}
+                        disabled={downloadingId === p.id}
                         style={{ flex: 1, justifyContent: "center" }}
                       >
-                        Download
+                        {downloadingId === p.id ? "Opening..." : "Download"}
                       </Btn>
                       <Btn
                         variant="secondary"
