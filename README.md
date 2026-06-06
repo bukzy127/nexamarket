@@ -1,12 +1,12 @@
 # NexaMarket
 
-A decentralized project marketplace built on **Injective**, with **IPFS** for
-file storage and **Firebase** for fast metadata queries. This repository
-contains the **Next.js frontend** for the project.
+A decentralized project marketplace built with **Next.js**, **Supabase**,
+**MetaMask**, and **Injective EVM Testnet**.
 
-> Backend (smart contracts, IPFS pinning service, Firestore wiring, Cloud
-> Functions) is documented in [`docs/BACKEND.md`](./docs/BACKEND.md) and
-> intentionally **not** included in this repo.
+> Supabase upload/access workflow is documented in
+> [`docs/SUPABASE_WORKFLOW.md`](./docs/SUPABASE_WORKFLOW.md).
+> Injective access and purchase flow is documented in
+> [`docs/INJECTIVE_CONTRACT_WORKFLOW.md`](./docs/INJECTIVE_CONTRACT_WORKFLOW.md).
 
 ## Quick start
 
@@ -21,19 +21,23 @@ App boots at <http://localhost:3000>.
 
 | Path | What it is |
 | --- | --- |
-| `src/app/` | Next.js App Router pages — landing, marketplace, upload, dashboard, project detail |
-| `src/components/` | All UI building blocks — premium motion + reveal-on-scroll baked in |
-| `src/lib/` | Frontend-only helpers: wallet detection, IPFS URL builder, mock data |
-| `src/hooks/useWallet.ts` | Zustand store for wallet state — persisted to `localStorage` |
+| `src/app/` | Next.js App Router pages: landing, marketplace, upload, dashboard, project detail |
+| `src/app/api/` | Backend routes for Supabase upload, metadata save, purchase confirmation, and access-gated downloads |
+| `src/components/` | UI building blocks |
+| `src/lib/` | Wallet, Supabase, Injective EVM, and server helpers |
+| `src/hooks/useProjectCatalog.ts` | Supabase-backed public listing catalog |
+| `contracts/NexaMarketAccess.sol` | Solidity smart contract for Injective EVM access control and direct owner payments |
+| `src/hooks/useWallet.ts` | MetaMask wallet state and real INJ balance |
 | `src/types/` | Shared TypeScript types |
-| `docs/FRONTEND.md` | Full frontend architecture & component reference |
-| `docs/BACKEND.md` | Backend architecture, contract schema, API contract |
+| `docs/FRONTEND.md` | Frontend architecture reference |
+| `docs/BACKEND.md` | Backend architecture and API contract |
 
 ## Tech
 
 - Next.js 14 (App Router) · TypeScript · React 18
-- Tailwind CSS (custom dark palette)
-- Framer Motion + IntersectionObserver for scroll/transition effects
+- Supabase Storage and Supabase database
+- MetaMask on Injective EVM Testnet
+- Ethers.js contract calls
 - Zustand for wallet state
 - Lucide icons + react-hot-toast
 

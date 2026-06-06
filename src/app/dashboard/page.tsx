@@ -6,8 +6,9 @@ import toast from "react-hot-toast";
 import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletModal } from "@/components/WalletModalProvider";
-import { SAMPLE_PROJECTS } from "@/lib/mock";
+import { useProjectCatalog } from "@/hooks/useProjectCatalog";
 import { shortAddress } from "@/lib/wallet";
+import { openVerifiedProjectDownload } from "@/lib/projectDownload";
 import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
 import Badge from "@/components/ui/Badge";
@@ -23,63 +24,15 @@ const SECTIONS: { id: Section; label: string; icon: IconName }[] = [
   { id: "wallet", label: "Wallet", icon: "wallet" },
 ];
 
-const TX_HISTORY = [
-  {
-    type: "purchase" as const,
-    title: "High-Rise Tower Blueprint Set",
-    amount: "-28.0 INJ",
-    date: "May 1, 2026",
-    status: "confirmed",
-    tx: "0xf2a1...3b9c",
-  },
-  {
-    type: "sale" as const,
-    title: "Site Safety Management Plan",
-    amount: "+5.5 INJ",
-    date: "Apr 28, 2026",
-    status: "confirmed",
-    tx: "0x9d3f...1a2b",
-  },
-  {
-    type: "purchase" as const,
-    title: "MEP Full Design Package",
-    amount: "-62.0 INJ",
-    date: "Apr 22, 2026",
-    status: "confirmed",
-    tx: "0xa7b2...4d1e",
-  },
-  {
-    type: "sale" as const,
-    title: "Facade Engineering Spec Pack",
-    amount: "+16.5 INJ",
-    date: "Apr 15, 2026",
-    status: "confirmed",
-    tx: "0x1c8d...7f3a",
-  },
-  {
-    type: "purchase" as const,
-    title: "Steel Connection Detail Library",
-    amount: "-22.0 INJ",
-    date: "Mar 30, 2026",
-    status: "confirmed",
-    tx: "0x5e2f...8c9b",
-  },
-];
-
-const MY_LISTINGS = [
-  { title: "Site Safety Management Plan", price: 5.5, sales: 12, status: "active" as const },
-  { title: "Facade Engineering Spec Pack", price: 16.5, sales: 8, status: "active" as const },
-  { title: "BOQ Template — Residential", price: 9.5, sales: 15, status: "active" as const },
-  { title: "RC Slab Design Calculations", price: 12.0, sales: 4, status: "active" as const },
-  { title: "Landscape Design Package", price: 7.5, sales: 2, status: "draft" as const },
-  { title: "Fire Safety Strategy Report", price: 8.0, sales: 0, status: "draft" as const },
-];
+const REAL_DATA_MESSAGE = "Real data will appear after transactions are completed.";
 
 export default function DashboardPage() {
   const wallet = useWallet();
   const { open: openWallet } = useWalletModal();
+  const { ownedProjects } = useProjectCatalog(wallet.address);
   const router = useRouter();
   const [active, setActive] = useState<Section>("overview");
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   if (!wallet.connected) {
     return (
@@ -128,7 +81,7 @@ export default function DashboardPage() {
               marginBottom: 32,
             }}
           >
-            Connect your Keplr, Leap, or MetaMask wallet to view your
+            Connect MetaMask on Injective EVM Testnet to view your
             dashboard, owned projects, and transaction history.
           </p>
           <Btn
@@ -144,14 +97,33 @@ export default function DashboardPage() {
     );
   }
 
-  const owned = SAMPLE_PROJECTS.slice(0, 3);
-  const balance = wallet.balance ?? "142.6";
-  const balanceUsd = (parseFloat(balance) * 22.4).toFixed(2);
+  const owned = ownedProjects;
+  const balance = wallet.balance;
 
   function copyAddress() {
     if (wallet.address) {
       void navigator.clipboard.writeText(wallet.address);
       toast.success("Address copied");
+    }
+  }
+
+  async function handleDownload(projectId: number) {
+    if (!wallet.address) {
+      openWallet();
+      return;
+    }
+
+    setDownloadingId(projectId);
+    try {
+      await openVerifiedProjectDownload(projectId, wallet.address);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Download access could not be verified.",
+      );
+    } finally {
+      setDownloadingId(null);
     }
   }
 
@@ -351,22 +323,15 @@ export default function DashboardPage() {
                     marginBottom: 6,
                   }}
                 >
-                  {balance}{" "}
+                  {balance ?? "Not available"}{" "}
                   <span style={{ fontSize: 24, color: TOKENS.textMuted }}>
                     INJ
                   </span>
                 </div>
                 <div style={{ fontSize: 16, color: TOKENS.textMuted }}>
-                  ≈ ${balanceUsd} USD &nbsp;
-                  <span
-                    style={{
-                      color: TOKENS.green,
-                      fontSize: 13,
-                      fontWeight: 600,
-                    }}
-                  >
-                    ↑ +12.4 INJ this month
-                  </span>
+                  {balance
+                    ? "Live wallet balance from Injective EVM Testnet."
+                    : "Wallet balance is not available yet."}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -525,19 +490,16 @@ export default function DashboardPage() {
                     marginBottom: 6,
                   }}
                 >
-                  74.5{" "}
-                  <span style={{ fontSize: 18, color: TOKENS.textMuted }}>
-                    INJ
-                  </span>
+                  Real data
                 </div>
                 <div
                   style={{
                     fontSize: 12,
-                    color: TOKENS.green,
+                    color: TOKENS.textMuted,
                     fontWeight: 600,
                   }}
                 >
-                  ↑ +18.2 INJ this month
+                  {REAL_DATA_MESSAGE}
                 </div>
                 <div
                   style={{
@@ -611,16 +573,10 @@ export default function DashboardPage() {
                     marginBottom: 6,
                   }}
                 >
-                  12{" "}
-                  <span style={{ fontSize: 18, color: TOKENS.textMuted }}>
-                    txns
-                  </span>
+                  Real data
                 </div>
                 <div style={{ fontSize: 12, color: TOKENS.textMuted }}>
-                  Total spent:{" "}
-                  <span style={{ color: TOKENS.gold, fontWeight: 600 }}>
-                    112 INJ
-                  </span>
+                  {REAL_DATA_MESSAGE}
                 </div>
                 <div
                   style={{
@@ -681,73 +637,9 @@ export default function DashboardPage() {
                     View all →
                   </button>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  {TX_HISTORY.slice(0, 4).map((tx, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        padding: "12px 0",
-                        borderBottom:
-                          i < 3 ? `1px solid ${TOKENS.border}` : "none",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: "50%",
-                          background:
-                            tx.type === "purchase"
-                              ? "rgba(244,63,94,0.1)"
-                              : "rgba(16,217,126,0.1)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Icon
-                          name={tx.type === "purchase" ? "download" : "upload"}
-                          size={15}
-                          color={
-                            tx.type === "purchase" ? TOKENS.red : TOKENS.green
-                          }
-                        />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            marginBottom: 2,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {tx.title}
-                        </div>
-                        <div style={{ fontSize: 11, color: TOKENS.textDim }}>
-                          {tx.date}
-                        </div>
-                      </div>
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 700,
-                          fontFamily: "var(--font-mono), monospace",
-                          color: tx.type === "sale" ? TOKENS.green : TOKENS.red,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {tx.amount}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <p style={{ color: TOKENS.textMuted, fontSize: 13, margin: 0 }}>
+                  {REAL_DATA_MESSAGE}
+                </p>
               </Card>
 
               <Card style={{ padding: 24 }}>
@@ -819,12 +711,20 @@ export default function DashboardPage() {
                           {p.category}
                         </div>
                       </div>
-                      <Btn
-                        variant="ghost"
-                        size="sm"
-                        icon="download"
-                        style={{ padding: "6px 8px" }}
-                      />
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDownload(p.id);
+                        }}
+                      >
+                        <Btn
+                          variant="ghost"
+                          size="sm"
+                          icon="download"
+                          disabled={downloadingId === p.id}
+                          style={{ padding: "6px 8px" }}
+                        />
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -898,9 +798,13 @@ export default function DashboardPage() {
                         variant="green"
                         size="sm"
                         icon="download"
+                        onClick={() => {
+                          void handleDownload(p.id);
+                        }}
+                        disabled={downloadingId === p.id}
                         style={{ flex: 1, justifyContent: "center" }}
                       >
-                        Download
+                        {downloadingId === p.id ? "Opening..." : "Download"}
                       </Btn>
                       <Btn
                         variant="secondary"
@@ -943,12 +847,19 @@ export default function DashboardPage() {
                 New Listing
               </Btn>
             </div>
-            <Card style={{ overflow: "hidden" }}>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ background: TOKENS.bg2 }}>
-                      {["Project", "Price", "Sales", "Revenue", "Status", "Actions"].map(
+            {owned.length === 0 ? (
+              <Card style={{ padding: 24 }}>
+                <p style={{ color: TOKENS.textMuted, fontSize: 14, margin: 0 }}>
+                  Real listings will appear after you upload projects.
+                </p>
+              </Card>
+            ) : (
+              <Card style={{ overflow: "hidden" }}>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: TOKENS.bg2 }}>
+                        {["Project", "Price", "Sales", "Revenue", "Status", "Actions"].map(
                         (h) => (
                           <th
                             key={h}
@@ -967,73 +878,70 @@ export default function DashboardPage() {
                             {h}
                           </th>
                         ),
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {MY_LISTINGS.map((l, i) => (
-                      <tr
-                        key={i}
-                        style={{
-                          borderBottom:
-                            i < MY_LISTINGS.length - 1
-                              ? `1px solid ${TOKENS.border}`
-                              : "none",
-                        }}
-                      >
-                        <td style={{ padding: "16px 20px", fontSize: 14, fontWeight: 600 }}>
-                          {l.title}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            fontSize: 13,
-                            fontFamily: "var(--font-mono), monospace",
-                            color: TOKENS.cyan,
-                          }}
-                        >
-                          {l.price} INJ
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            fontSize: 13,
-                            color: TOKENS.textMuted,
-                          }}
-                        >
-                          {l.sales}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            fontSize: 13,
-                            fontFamily: "var(--font-mono), monospace",
-                            color: TOKENS.green,
-                          }}
-                        >
-                          +{(l.price * l.sales).toFixed(1)} INJ
-                        </td>
-                        <td style={{ padding: "16px 20px" }}>
-                          <Badge color={l.status === "active" ? "green" : "gold"}>
-                            {l.status}
-                          </Badge>
-                        </td>
-                        <td style={{ padding: "16px 20px" }}>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <Btn variant="ghost" size="sm">
-                              Edit
-                            </Btn>
-                            <Btn variant="danger" size="sm">
-                              Remove
-                            </Btn>
-                          </div>
-                        </td>
+                        )}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+                    </thead>
+                    <tbody>
+                      {owned.map((project, i) => (
+                        <tr
+                          key={project.id}
+                          style={{
+                            borderBottom:
+                              i < owned.length - 1
+                                ? `1px solid ${TOKENS.border}`
+                                : "none",
+                          }}
+                        >
+                          <td style={{ padding: "16px 20px", fontSize: 14, fontWeight: 600 }}>
+                            {project.title}
+                          </td>
+                          <td
+                            style={{
+                              padding: "16px 20px",
+                              fontSize: 13,
+                              fontFamily: "var(--font-mono), monospace",
+                              color: TOKENS.cyan,
+                            }}
+                          >
+                            {project.price} INJ
+                          </td>
+                          <td
+                            style={{
+                              padding: "16px 20px",
+                              fontSize: 13,
+                              color: TOKENS.textMuted,
+                            }}
+                          >
+                            {REAL_DATA_MESSAGE}
+                          </td>
+                          <td
+                            style={{
+                              padding: "16px 20px",
+                              fontSize: 13,
+                              color: TOKENS.textMuted,
+                            }}
+                          >
+                            {REAL_DATA_MESSAGE}
+                          </td>
+                          <td style={{ padding: "16px 20px" }}>
+                            <Badge color="green">active</Badge>
+                          </td>
+                          <td style={{ padding: "16px 20px" }}>
+                            <Btn
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/project/${project.id}`)}
+                            >
+                              View
+                            </Btn>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
           </div>
         )}
 
@@ -1049,96 +957,10 @@ export default function DashboardPage() {
             >
               Transaction History
             </h1>
-            <Card style={{ overflow: "hidden" }}>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ background: TOKENS.bg2 }}>
-                      {["Type", "Project", "Amount", "Date", "Tx Hash", "Status"].map(
-                        (h) => (
-                          <th
-                            key={h}
-                            style={{
-                              padding: "14px 20px",
-                              textAlign: "left",
-                              fontSize: 11,
-                              color: TOKENS.textMuted,
-                              fontWeight: 600,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.06em",
-                              borderBottom: `1px solid ${TOKENS.border}`,
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {h}
-                          </th>
-                        ),
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {TX_HISTORY.map((tx, i) => (
-                      <tr
-                        key={i}
-                        style={{
-                          borderBottom:
-                            i < TX_HISTORY.length - 1
-                              ? `1px solid ${TOKENS.border}`
-                              : "none",
-                        }}
-                      >
-                        <td style={{ padding: "16px 20px" }}>
-                          <Badge color={tx.type === "sale" ? "green" : "red"}>
-                            {tx.type}
-                          </Badge>
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            fontSize: 14,
-                            fontWeight: 600,
-                          }}
-                        >
-                          {tx.title}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            fontSize: 13,
-                            fontFamily: "var(--font-mono), monospace",
-                            color: tx.type === "sale" ? TOKENS.green : TOKENS.red,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {tx.amount}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            fontSize: 13,
-                            color: TOKENS.textMuted,
-                          }}
-                        >
-                          {tx.date}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            fontSize: 12,
-                            fontFamily: "var(--font-mono), monospace",
-                            color: TOKENS.textDim,
-                          }}
-                        >
-                          {tx.tx}
-                        </td>
-                        <td style={{ padding: "16px 20px" }}>
-                          <Badge color="green">{tx.status}</Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <Card style={{ padding: 24 }}>
+              <p style={{ color: TOKENS.textMuted, fontSize: 14, margin: 0 }}>
+                {REAL_DATA_MESSAGE}
+              </p>
             </Card>
           </div>
         )}
@@ -1185,7 +1007,7 @@ export default function DashboardPage() {
                     marginBottom: 4,
                   }}
                 >
-                  {balance}
+                  {balance ?? "Not available"}
                 </div>
                 <div
                   style={{
@@ -1194,7 +1016,9 @@ export default function DashboardPage() {
                     marginBottom: 28,
                   }}
                 >
-                  INJ ≈ ${balanceUsd} USD
+                  {balance
+                    ? "Live wallet balance from Injective EVM Testnet."
+                    : "Wallet balance is not available yet."}
                 </div>
                 <div style={{ display: "flex", gap: 12 }}>
                   <Btn

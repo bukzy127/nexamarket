@@ -1,71 +1,89 @@
-/**
- * Frontend-only wallet adapter.
- *
- * Detects whether Keplr / Leap / MetaMask are present and exposes a connect()
- * that returns a wallet address. Signing and on-chain calls are intentionally
- * out of scope here — they belong to the backend integration layer.
- */
+"use client";
+
+import { ethers } from "ethers";
 import type { WalletType } from "@/types";
 
-export const INJECTIVE_CHAIN_ID = "injective-888"; // testnet by default
+export const INJECTIVE_EVM_TESTNET = {
+  chainId: "0x59f",
+  chainName: "Injective EVM Testnet",
+  rpcUrls: ["https://k8s.testnet.json-rpc.injective.network/"],
+  nativeCurrency: {
+    name: "Injective",
+    symbol: "INJ",
+    decimals: 18,
+  },
+  blockExplorerUrls: ["https://testnet.blockscout.injective.network/"],
+};
 
 declare global {
   interface Window {
-    keplr?: KeplrLike;
-    leap?: KeplrLike;
-    ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      on?: (event: string, handler: (...args: unknown[]) => void) => void;
+      removeListener?: (
+        event: string,
+        handler: (...args: unknown[]) => void,
+      ) => void;
+    };
   }
 }
 
-interface KeplrLike {
-  enable: (chainId: string) => Promise<void>;
-  getKey: (chainId: string) => Promise<{ bech32Address: string; name: string }>;
+function requireEthereum() {
+  if (typeof window === "undefined" || !window.ethereum) {
+    throw new Error("MetaMask is required. Install MetaMask and try again.");
+  }
+  return window.ethereum;
 }
 
 export async function detectAvailable(): Promise<WalletType[]> {
-  if (typeof window === "undefined") return [];
-  const out: WalletType[] = [];
-  if (window.keplr) out.push("keplr");
-  if (window.leap) out.push("leap");
-  if (window.ethereum) out.push("metamask");
-  return out;
+  return typeof window !== "undefined" && window.ethereum ? ["metamask"] : [];
+}
+
+export async function ensureInjectiveNetwork() {
+  const ethereum = requireEthereum();
+  try {
+    await ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: INJECTIVE_EVM_TESTNET.chainId }],
+    });
+  } catch (err) {
+    const code = (err as { code?: number }).code;
+    if (code !== 4902) throw err;
+    await ethereum.request({
+      method: "wallet_addEthereumChain",
+      params: [INJECTIVE_EVM_TESTNET],
+    });
+  }
+}
+
+export async function getBrowserProvider() {
+  requireEthereum();
+  await ensureInjectiveNetwork();
+  return new ethers.BrowserProvider(window.ethereum!);
 }
 
 export async function connect(type: WalletType): Promise<{ address: string }> {
-  if (typeof window === "undefined") throw new Error("No window");
-
-  if (type === "keplr" || type === "leap") {
-    const provider = type === "keplr" ? window.keplr : window.leap;
-    if (!provider) {
-      // Fall back to a mock address so the UI is still usable in dev.
-      return { address: mockInjAddress() };
-    }
-    await provider.enable(INJECTIVE_CHAIN_ID);
-    const key = await provider.getKey(INJECTIVE_CHAIN_ID);
-    return { address: key.bech32Address };
-  }
-
-  if (type === "metamask") {
-    if (!window.ethereum) return { address: mockInjAddress() };
-    const accounts = (await window.ethereum.request({
-      method: "eth_requestAccounts",
-    })) as string[];
-    if (!accounts?.[0]) throw new Error("No account selected");
-    return { address: accounts[0] };
-  }
-
-  throw new Error(`Unknown wallet type: ${type}`);
+  if (type !== "metamask") throw new Error("Only MetaMask is supported.");
+  const provider = await getBrowserProvider();
+  await provider.send("eth_requestAccounts", []);
+  const signer = await provider.getSigner();
+  return { address: await signer.getAddress() };
 }
 
-function mockInjAddress(): string {
-  const chars = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-  let suffix = "";
-  for (let i = 0; i < 38; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
-  return `inj1${suffix}`;
+export async function readBalance(address: string): Promise<string> {
+  const provider = await getBrowserProvider();
+  const balance = await provider.getBalance(address);
+  return Number(ethers.formatEther(balance)).toFixed(4);
+}
+
+export async function signWalletMessage(message: string): Promise<string> {
+  const provider = await getBrowserProvider();
+  const signer = await provider.getSigner();
+  return signer.signMessage(message);
 }
 
 export function shortAddress(addr: string | null | undefined): string {
   if (!addr) return "";
   if (addr.length <= 12) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }

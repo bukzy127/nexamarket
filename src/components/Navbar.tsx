@@ -193,8 +193,9 @@ export default function Navbar() {
               cursor: "pointer",
             }}
           >
-            <div
+            <span
               style={{
+                display: "inline-block",
                 width: 20,
                 height: 20,
                 borderRadius: "50%",
