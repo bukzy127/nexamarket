@@ -16,12 +16,9 @@ const WALLETS: {
   desc: string;
   color: string;
 }[] = [
-  {
-    id: "metamask",
-    name: "MetaMask",
-    desc: "Injective EVM Testnet",
-    color: "#f6851b",
-  },
+  { id: "keplr", name: "Keplr Wallet", desc: "Cosmos ecosystem wallet", color: "#5c6bc0" },
+  { id: "leap", name: "Leap Wallet", desc: "Multi-chain Cosmos wallet", color: "#7c3aed" },
+  { id: "metamask", name: "MetaMask", desc: "EVM compatible wallet", color: "#f6851b" },
 ];
 
 export default function WalletModal({ onClose }: WalletModalProps) {
@@ -33,8 +30,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
     try {
       await wallet.connect(type);
       onClose();
-    } catch (err) {
-      console.error(err);
+    } catch {
       setConnecting(null);
     }
   }
@@ -112,7 +108,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
                 transition: "all 0.2s",
               }}
             >
-              <span
+              <div
                 style={{
                   width: 40,
                   height: 40,
@@ -126,11 +122,10 @@ export default function WalletModal({ onClose }: WalletModalProps) {
                 }}
               >
                 <Icon name="wallet" size={20} color={w.color} />
-              </span>
-              <span style={{ flex: 1 }}>
-                <span
+              </div>
+              <div style={{ flex: 1 }}>
+                <div
                   style={{
-                    display: "block",
                     fontSize: 15,
                     fontWeight: 600,
                     color: TOKENS.text,
@@ -138,19 +133,13 @@ export default function WalletModal({ onClose }: WalletModalProps) {
                   }}
                 >
                   {w.name}
-                </span>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 12,
-                    color: TOKENS.textMuted,
-                  }}
-                >
+                </div>
+                <div style={{ fontSize: 12, color: TOKENS.textMuted }}>
                   {w.desc}
-                </span>
-              </span>
+                </div>
+              </div>
               {connecting === w.id && (
-                <span
+                <div
                   style={{
                     width: 20,
                     height: 20,

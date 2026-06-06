@@ -9,7 +9,7 @@ export type Category =
   | "Survey & Geotechnical";
 
 export interface Project {
-  /** Numeric id also used as the on-chain project id. */
+  /** Numeric id used by the design / mock layer. */
   id: number;
   title: string;
   description: string;
@@ -18,8 +18,6 @@ export interface Project {
   price: number;
   /** Wallet address (or short form) of current owner. */
   owner: string;
-  /** Original creator/seller wallet address. */
-  creator?: string;
   rating: number;
   reviews: number;
   tags: string[];
@@ -27,12 +25,9 @@ export interface Project {
   preview: string;
   featured: boolean;
   sales: number;
-  /** Server-only Supabase Storage download URL for the private project package. */
+  /** IPFS CID of the project file. */
+  cid?: string;
   fileUrl?: string;
-  fileName?: string;
-  fileSize?: number;
-  storageProvider?: "supabase";
-  storagePath?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -55,7 +50,7 @@ export interface UserProfile {
   createdAt: string;
 }
 
-export type WalletType = "metamask";
+export type WalletType = "keplr" | "leap" | "metamask";
 
 export interface WalletState {
   address: string | null;
