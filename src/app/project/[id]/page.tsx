@@ -22,6 +22,7 @@ import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
 import Badge from "@/components/ui/Badge";
 import Icon, { type IconName } from "@/components/ui/Icon";
+import ProjectQRCode from "@/components/ProjectQRCode";
 
 const TX_STEPS: { label: string; icon: IconName }[] = [
   { label: "Verifying wallet", icon: "wallet" },
@@ -946,6 +947,26 @@ export default function ProjectDetailPage() {
                   </div>
                 ))}
               </div>
+            </Card>
+
+            {/* QR Code Card */}
+            <Card style={{ padding: "28px 24px", textAlign: "center" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>
+                Share Project
+              </h3>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                <ProjectQRCode
+                  projectId={project.id}
+                  projectTitle={project.title}
+                  size={180}
+                  showDetails={false}
+                  allowDownload={true}
+                  allowShare={true}
+                />
+              </div>
+              <p style={{ fontSize: 12, color: TOKENS.textMuted, lineHeight: 1.5 }}>
+                Scan to instantly share this project with others
+              </p>
             </Card>
 
             <Card style={{ padding: 20 }}>
