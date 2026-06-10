@@ -11,11 +11,13 @@ import {
   useProjectCatalog,
 } from "@/hooks/useProjectCatalog";
 import { registerProjectOnChain } from "@/lib/injectiveContract";
+import { useProjectQRCode } from "@/hooks/useProjectQRCode";
 import type { Category } from "@/types";
 import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
 import Badge from "@/components/ui/Badge";
 import Icon, { type IconName } from "@/components/ui/Icon";
+import ProjectQRCode from "@/components/ProjectQRCode";
 
 const CATEGORIES = [
   "Architectural Plans",
@@ -119,6 +121,7 @@ export default function UploadPage() {
   const wallet = useWallet();
   const { open: openWallet } = useWalletModal();
   const { addProject } = useProjectCatalog(wallet.address);
+  const { generateAndStoreQRCode } = useProjectQRCode();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -134,6 +137,7 @@ export default function UploadPage() {
   );
   const [publishedFileUrl, setPublishedFileUrl] = useState<string | null>(null);
   const [publishedTxHash, setPublishedTxHash] = useState<string | null>(null);
+  const [qrCodeGenerated, setQrCodeGenerated] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
   function setField<K extends keyof FormState>(k: K, v: FormState[K]) {
@@ -190,6 +194,16 @@ export default function UploadPage() {
       setPublishedProjectId(project.id);
       setPublishedFileUrl(upload.url);
       setPublishedTxHash(chain.txHash);
+      
+      // Generate and store QR code
+      try {
+        await generateAndStoreQRCode(project.id, form.title);
+        setQrCodeGenerated(true);
+      } catch (err) {
+        console.error("Failed to generate QR code:", err);
+        // Continue anyway, QR generation failure should not block upload
+      }
+      
       setProgress(100);
       setSubmitted(true);
     } catch (err) {
@@ -1123,6 +1137,98 @@ export default function UploadPage() {
                   size="lg"
                 >
                   {uploading ? `Publishing... ${progress}%` : "Publish Asset"}
+                </Btn>
+              </div>
+            </div>
+          )}
+
+          {submitted && publishedProjectId && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
+                🎉 Project Published Successfully!
+              </h2>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                {/* Success Summary */}
+                <div
+                  style={{
+                    padding: 24,
+                    background: TOKENS.bg2,
+                    borderRadius: 14,
+                    border: `1px solid ${TOKENS.border}`,
+                  }}
+                >
+                  <div style={{ marginBottom: 16 }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 700, color: TOKENS.cyan, marginBottom: 16 }}>
+                      What's Next
+                    </h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {[
+                        { icon: "check" as IconName, text: "Project is now live on marketplace" },
+                        { icon: "download" as IconName, text: "Only you can access files until purchase" },
+                        { icon: "code" as IconName, text: "Buyers can scan your QR code to view project" },
+                        { icon: "trending" as IconName, text: "Wait for purchases and earnings" },
+                      ].map((item, i) => (
+                        <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                          <Icon name={item.icon} size={18} color={TOKENS.green} style={{ marginTop: 2, flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, color: TOKENS.textMuted }}>{item.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ borderTop: `1px solid ${TOKENS.border}`, paddingTop: 16, marginTop: 16 }}>
+                    <p style={{ fontSize: 12, color: TOKENS.textDim, marginBottom: 12 }}>Project ID</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: TOKENS.cyan, fontFamily: "monospace" }}>
+                      {publishedProjectId}
+                    </p>
+                  </div>
+                </div>
+
+                {/* QR Code Display */}
+                {qrCodeGenerated && publishedProjectId && (
+                  <div style={{ width: "100%" }}>
+                    <ProjectQRCode
+                      projectId={publishedProjectId}
+                      projectTitle={form.title}
+                      size={240}
+                      showDetails={false}
+                      allowDownload={true}
+                      allowShare={true}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  padding: 20,
+                  background: "rgba(0,212,255,0.04)",
+                  borderRadius: 12,
+                  border: "1px solid rgba(0,212,255,0.12)",
+                }}
+              >
+                <p style={{ fontSize: 13, color: TOKENS.cyan, fontWeight: 700, marginBottom: 8 }}>
+                  Share Your Project
+                </p>
+                <p style={{ fontSize: 13, color: TOKENS.textMuted, lineHeight: 1.6 }}>
+                  Share the QR code with potential buyers or visit your project dashboard to manage listings.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <Btn
+                  onClick={() => router.push("/dashboard")}
+                  variant="secondary"
+                  icon="dashboard"
+                >
+                  Go to Dashboard
+                </Btn>
+                <Btn
+                  onClick={() => router.push(`/project/${publishedProjectId}`)}
+                  icon="arrow"
+                >
+                  View Project
                 </Btn>
               </div>
             </div>
