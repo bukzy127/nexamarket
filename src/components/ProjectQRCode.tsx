@@ -149,7 +149,23 @@ export const ProjectQRCode: React.FC<ProjectQRCodeProps> = ({
         {allowDownload && !isLoading && (
           <button
             onClick={handleDownload}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg hover:shadow-cyan-500/30"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm text-black transition-all"
+            style={{
+              background: "linear-gradient(135deg, #00d4ff, #0050e6)",
+              boxShadow: "0 0 16px rgba(0,212,255,0.25)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background =
+                "linear-gradient(135deg, #00e5ff, #0070f3)";
+              e.currentTarget.style.boxShadow =
+                "0 0 32px rgba(0,212,255,0.5)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background =
+                "linear-gradient(135deg, #00d4ff, #0050e6)";
+              e.currentTarget.style.boxShadow =
+                "0 0 16px rgba(0,212,255,0.25)";
+            }}
           >
             <Download size={16} />
             Download QR Code
@@ -161,7 +177,22 @@ export const ProjectQRCode: React.FC<ProjectQRCodeProps> = ({
             {typeof navigator !== "undefined" && "share" in navigator && (
               <button
                 onClick={handleShare}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/30"
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all"
+                style={{
+                  background: "rgba(0,212,255,0.07)",
+                  border: "1px solid rgba(0,212,255,0.12)",
+                  color: "#00d4ff",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(0,212,255,0.15)";
+                  e.currentTarget.style.border =
+                    "1px solid rgba(0,212,255,0.35)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(0,212,255,0.07)";
+                  e.currentTarget.style.border =
+                    "1px solid rgba(0,212,255,0.12)";
+                }}
               >
                 <Share2 size={16} />
                 Share Project

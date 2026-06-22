@@ -26,8 +26,6 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
         value,
         {
           errorCorrectionLevel,
-          type: "image/png",
-          quality: 0.92,
           margin: 1,
           width: size,
           color: {
@@ -35,7 +33,7 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
             light: "#FFFFFF",
           },
         },
-        (error: Error | null) => {
+        (error: Error | null | undefined) => {
           if (error) console.error("QR Code generation error:", error);
         }
       );
@@ -77,7 +75,21 @@ export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
       {/* Download Button */}
       <button
         onClick={downloadQRCode}
-        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg font-medium transition-all duration-200 hover:shadow-lg hover:shadow-cyan-500/30"
+        className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm text-black transition-all"
+        style={{
+          background: "linear-gradient(135deg, #00d4ff, #0050e6)",
+          boxShadow: "0 0 16px rgba(0,212,255,0.25)",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background =
+            "linear-gradient(135deg, #00e5ff, #0070f3)";
+          e.currentTarget.style.boxShadow = "0 0 32px rgba(0,212,255,0.5)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background =
+            "linear-gradient(135deg, #00d4ff, #0050e6)";
+          e.currentTarget.style.boxShadow = "0 0 16px rgba(0,212,255,0.25)";
+        }}
       >
         <Download size={16} />
         Download QR Code

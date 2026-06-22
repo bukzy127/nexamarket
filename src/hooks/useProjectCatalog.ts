@@ -17,6 +17,10 @@ export interface UploadedProjectInput {
   fileSize: number;
   fileUrl: string;
   storagePath: string;
+  /** Optional IPFS CID once the file has been pinned via Pinata. */
+  cid?: string;
+  /** Public IPFS gateway URL once pinned. */
+  ipfsUrl?: string;
 }
 
 function normalizeAddress(addr: string | null | undefined): string {
@@ -54,8 +58,10 @@ export function createUploadedProject(input: UploadedProjectInput): Project {
     fileUrl: input.fileUrl,
     fileName: input.fileName,
     fileSize: input.fileSize,
-    storageProvider: "supabase",
+    storageProvider: input.cid ? "supabase+ipfs" : "supabase",
     storagePath: input.storagePath,
+    cid: input.cid,
+    ipfsUrl: input.ipfsUrl,
     createdAt: now,
     updatedAt: now,
   };

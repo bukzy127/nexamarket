@@ -612,7 +612,12 @@ export default function ProjectDetailPage() {
                     { label: "License", value: "This feature is not available yet." },
                     { label: "Last Updated", value: updatedAt },
                     { label: "Blockchain", value: "Injective" },
-                    { label: "Storage", value: "Supabase Storage" },
+                    {
+                      label: "Storage",
+                      value: project.cid
+                        ? "Supabase + IPFS (Pinata)"
+                        : "Supabase Storage",
+                    },
                     {
                       label: "Asset ID",
                       value: `#${String(project.id).padStart(5, "0")}`,
@@ -655,6 +660,80 @@ export default function ProjectDetailPage() {
                     </div>
                   ))}
                 </div>
+
+                {project.cid && (
+                  <div
+                    style={{
+                      marginTop: 20,
+                      padding: "16px 18px",
+                      background: TOKENS.bg2,
+                      borderRadius: 12,
+                      border: "1px solid rgba(0,212,255,0.18)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                        marginBottom: 8,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Icon name="chain" size={14} color={TOKENS.cyan} />
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: TOKENS.textMuted,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                            fontWeight: 600,
+                          }}
+                        >
+                          IPFS Content ID
+                        </span>
+                      </div>
+                      {project.ipfsUrl && (
+                        <a
+                          href={project.ipfsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontSize: 12,
+                            color: TOKENS.green,
+                            textDecoration: "underline",
+                          }}
+                        >
+                          Open gateway →
+                        </a>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: TOKENS.text,
+                        fontFamily: "var(--font-mono), monospace",
+                        wordBreak: "break-all",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {project.cid}
+                    </div>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: TOKENS.textMuted,
+                        marginTop: 8,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      File is content-addressed and pinned on IPFS — anyone with
+                      the CID can verify byte-for-byte integrity.
+                    </p>
+                  </div>
+                )}
               </Card>
             )}
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletModal } from "@/components/WalletModalProvider";
-import { uploadToSupabaseStorage } from "@/lib/supabaseStorage";
+import { pinFileToIpfs, uploadToSupabaseStorage } from "@/lib/supabaseStorage";
 import {
   createUploadedProject,
   useProjectCatalog,
@@ -137,6 +137,9 @@ export default function UploadPage() {
   );
   const [publishedFileUrl, setPublishedFileUrl] = useState<string | null>(null);
   const [publishedTxHash, setPublishedTxHash] = useState<string | null>(null);
+  const [publishedCid, setPublishedCid] = useState<string | null>(null);
+  const [publishedIpfsUrl, setPublishedIpfsUrl] = useState<string | null>(null);
+  const [pinError, setPinError] = useState<string | null>(null);
   const [qrCodeGenerated, setQrCodeGenerated] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
@@ -163,6 +166,26 @@ export default function UploadPage() {
         selectedFile,
         wallet.address,
       );
+
+      // Pin to IPFS via Pinata. Pinning is best-effort: if it fails the
+      // Supabase upload still succeeds and we surface a non-blocking warning.
+      let pinned: { cid: string; ipfsUrl: string } | null = null;
+      try {
+        const pin = await pinFileToIpfs({
+          fileUrl: upload.url,
+          fileName: selectedFile.name,
+          contentType: selectedFile.type || undefined,
+          owner: wallet.address,
+        });
+        pinned = { cid: pin.cid, ipfsUrl: pin.gateway };
+      } catch (err) {
+        setPinError(
+          err instanceof Error
+            ? err.message
+            : "Unable to pin file to IPFS. Listing was published with Supabase storage only.",
+        );
+      }
+
       const project = createUploadedProject({
         title: form.title,
         description: form.description,
@@ -177,6 +200,8 @@ export default function UploadPage() {
         fileSize: upload.size,
         fileUrl: upload.url,
         storagePath: upload.url,
+        cid: pinned?.cid,
+        ipfsUrl: pinned?.ipfsUrl,
       });
       const metadataRes = await fetch("/api/projects", {
         method: "POST",
@@ -194,6 +219,8 @@ export default function UploadPage() {
       setPublishedProjectId(project.id);
       setPublishedFileUrl(upload.url);
       setPublishedTxHash(chain.txHash);
+      setPublishedCid(pinned?.cid ?? null);
+      setPublishedIpfsUrl(pinned?.ipfsUrl ?? null);
       
       // Generate and store QR code
       try {
@@ -1182,6 +1209,63 @@ export default function UploadPage() {
                     <p style={{ fontSize: 14, fontWeight: 700, color: TOKENS.cyan, fontFamily: "monospace" }}>
                       {publishedProjectId}
                     </p>
+
+                    {publishedCid ? (
+                      <div style={{ marginTop: 16 }}>
+                        <p style={{ fontSize: 12, color: TOKENS.textDim, marginBottom: 6 }}>
+                          IPFS CID
+                        </p>
+                        <p
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: TOKENS.cyan,
+                            fontFamily: "monospace",
+                            wordBreak: "break-all",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {publishedCid}
+                        </p>
+                        {publishedIpfsUrl && (
+                          <a
+                            href={publishedIpfsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              marginTop: 8,
+                              fontSize: 12,
+                              color: TOKENS.green,
+                              textDecoration: "underline",
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            <Icon name="chain" size={12} color={TOKENS.green} />
+                            Open on IPFS gateway
+                          </a>
+                        )}
+                      </div>
+                    ) : pinError ? (
+                      <div
+                        style={{
+                          marginTop: 16,
+                          padding: 12,
+                          borderRadius: 10,
+                          background: "rgba(245,158,11,0.06)",
+                          border: "1px solid rgba(245,158,11,0.2)",
+                        }}
+                      >
+                        <p style={{ fontSize: 12, color: TOKENS.gold, fontWeight: 600, marginBottom: 4 }}>
+                          IPFS pinning skipped
+                        </p>
+                        <p style={{ fontSize: 12, color: TOKENS.textMuted, lineHeight: 1.5 }}>
+                          {pinError}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 

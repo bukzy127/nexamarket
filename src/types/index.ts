@@ -31,8 +31,12 @@ export interface Project {
   fileUrl?: string;
   fileName?: string;
   fileSize?: number;
-  storageProvider?: "supabase";
+  storageProvider?: "supabase" | "supabase+ipfs";
   storagePath?: string;
+  /** IPFS content identifier (CIDv1). Present when the file has been pinned. */
+  cid?: string;
+  /** Public IPFS gateway URL — `https://<gateway>/ipfs/<cid>`. */
+  ipfsUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }

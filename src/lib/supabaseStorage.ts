@@ -27,3 +27,35 @@ export async function uploadToSupabaseStorage(
 
   return res.json();
 }
+
+export interface IpfsPinResult {
+  cid: string;
+  size: number;
+  gateway: string;
+  pinnedAt: string;
+}
+
+/**
+ * Pin a file already uploaded to Supabase (or any HTTPS URL) to IPFS via the
+ * server-side Pinata route. Returns the CID + public gateway URL.
+ */
+export async function pinFileToIpfs(args: {
+  fileUrl: string;
+  fileName: string;
+  contentType?: string;
+  owner: string;
+  projectId?: string | number;
+}): Promise<IpfsPinResult> {
+  const res = await fetch("/api/storage/pin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "IPFS pinning failed.");
+  }
+
+  return res.json();
+}
