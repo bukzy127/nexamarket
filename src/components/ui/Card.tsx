@@ -28,7 +28,7 @@ export default function Card({
       onMouseLeave={() => setHovered(false)}
       className={className}
       style={{
-        background: "linear-gradient(135deg, rgba(13,22,37,0.9) 0%, rgba(8,15,26,0.95) 100%)",
+        background: "var(--card)",
         border: `1px solid ${hovered && hoverable ? TOKENS.borderHover : TOKENS.border}`,
         borderRadius: 16,
         backdropFilter: "blur(12px)",
@@ -36,7 +36,7 @@ export default function Card({
         boxShadow:
           hovered && glow
             ? TOKENS.cyanGlow
-            : "0 4px 24px rgba(0,0,0,0.4)",
+            : "0 4px 24px var(--shadow)",
         cursor: onClick ? "pointer" : "default",
         transform: hovered && hoverable ? "translateY(-2px)" : "none",
         ...style,

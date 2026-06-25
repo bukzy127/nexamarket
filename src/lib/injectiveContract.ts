@@ -57,7 +57,7 @@ export async function registerProjectOnChain(
   const tx = await marketplace.registerProject(
     BigInt(project.id),
     projectPrice,
-    project.storagePath || "",
+    project.cid || project.storagePath || "",
   );
   const receipt = await tx.wait();
   return { txHash: receipt?.hash || tx.hash };

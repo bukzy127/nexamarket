@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletModal } from "@/components/WalletModalProvider";
-import { pinFileToIpfs, uploadToSupabaseStorage } from "@/lib/supabaseStorage";
+import { pinFileToIpfs } from "@/lib/supabaseStorage";
 import {
   createUploadedProject,
   useProjectCatalog,
@@ -17,7 +17,7 @@ import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
 import Badge from "@/components/ui/Badge";
 import Icon, { type IconName } from "@/components/ui/Icon";
-import ProjectQRCode from "@/components/ProjectQRCode";
+import { readableError } from "@/lib/errors";
 
 const CATEGORIES = [
   "Architectural Plans",
@@ -64,8 +64,8 @@ const STORAGE_OPTIONS: {
 }[] = [
   {
     id: "supabase",
-    label: "Supabase Storage",
-    desc: "Files are uploaded to the project-files bucket",
+    label: "Pinata / IPFS",
+    desc: "Files and preview images are pinned directly to IPFS",
     icon: "zap",
     badge: "Active",
   },
@@ -124,6 +124,8 @@ export default function UploadPage() {
   const { generateAndStoreQRCode } = useProjectQRCode();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewInputRef = useRef<HTMLInputElement | null>(null);
+  const additionalPreviewInputRef = useRef<HTMLInputElement | null>(null);
 
   const [step, setStep] = useState(1);
   const [dragOver, setDragOver] = useState(false);
@@ -131,16 +133,12 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewFiles, setPreviewFiles] = useState<File[]>([]);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishedProjectId, setPublishedProjectId] = useState<number | null>(
     null,
   );
-  const [publishedFileUrl, setPublishedFileUrl] = useState<string | null>(null);
   const [publishedTxHash, setPublishedTxHash] = useState<string | null>(null);
-  const [publishedCid, setPublishedCid] = useState<string | null>(null);
-  const [publishedIpfsUrl, setPublishedIpfsUrl] = useState<string | null>(null);
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [qrCodeGenerated, setQrCodeGenerated] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
   function setField<K extends keyof FormState>(k: K, v: FormState[K]) {
@@ -153,7 +151,7 @@ export default function UploadPage() {
   }
 
   async function handleSubmit() {
-    if (!selectedFile || !wallet.address) return;
+    if (!selectedFile || previewFiles.length === 0 || !wallet.address) return;
     setUploading(true);
     setPublishError(null);
     setProgress(0);
@@ -162,31 +160,28 @@ export default function UploadPage() {
     }, 220);
 
     try {
-      const upload = await uploadToSupabaseStorage(
-        selectedFile,
-        wallet.address,
-      );
-
-      // Pin to IPFS via Pinata. Pinning is best-effort: if it fails the
-      // Supabase upload still succeeds and we surface a non-blocking warning.
-      let pinned: { cid: string; ipfsUrl: string } | null = null;
-      try {
-        const pin = await pinFileToIpfs({
-          fileUrl: upload.url,
-          fileName: selectedFile.name,
-          contentType: selectedFile.type || undefined,
+      const projectId = Date.now();
+      const [filePin, previewPins] = await Promise.all([
+        pinFileToIpfs({
+          file: selectedFile,
           owner: wallet.address,
-        });
-        pinned = { cid: pin.cid, ipfsUrl: pin.gateway };
-      } catch (err) {
-        setPinError(
-          err instanceof Error
-            ? err.message
-            : "Unable to pin file to IPFS. Listing was published with Supabase storage only.",
-        );
-      }
+          projectId,
+          kind: "project",
+        }),
+        Promise.all(
+          previewFiles.map((file) =>
+            pinFileToIpfs({
+              file,
+              owner: wallet.address!,
+              projectId,
+              kind: "preview",
+            }),
+          ),
+        ),
+      ]);
 
       const project = createUploadedProject({
+        id: projectId,
         title: form.title,
         description: form.description,
         category: form.category as Category,
@@ -196,12 +191,15 @@ export default function UploadPage() {
           .map((tag) => tag.trim())
           .filter(Boolean),
         owner: wallet.address,
+        ownerUsername: wallet.username || undefined,
         fileName: selectedFile.name,
-        fileSize: upload.size,
-        fileUrl: upload.url,
-        storagePath: upload.url,
-        cid: pinned?.cid,
-        ipfsUrl: pinned?.ipfsUrl,
+        fileSize: filePin.size,
+        fileUrl: filePin.gateway,
+        storagePath: filePin.cid,
+        cid: filePin.cid,
+        ipfsUrl: filePin.gateway,
+        previewImages: previewPins.map((pin) => pin.gateway),
+        previewCids: previewPins.map((pin) => pin.cid),
       });
       const metadataRes = await fetch("/api/projects", {
         method: "POST",
@@ -217,15 +215,11 @@ export default function UploadPage() {
       const chain = await registerProjectOnChain(project);
       addProject(project);
       setPublishedProjectId(project.id);
-      setPublishedFileUrl(upload.url);
       setPublishedTxHash(chain.txHash);
-      setPublishedCid(pinned?.cid ?? null);
-      setPublishedIpfsUrl(pinned?.ipfsUrl ?? null);
       
       // Generate and store QR code
       try {
         await generateAndStoreQRCode(project.id, form.title);
-        setQrCodeGenerated(true);
       } catch (err) {
         console.error("Failed to generate QR code:", err);
         // Continue anyway, QR generation failure should not block upload
@@ -235,7 +229,7 @@ export default function UploadPage() {
       setSubmitted(true);
     } catch (err) {
       setPublishError(
-        err instanceof Error ? err.message : "Unable to publish asset.",
+        readableError(err, "The project could not be published."),
       );
     } finally {
       window.clearInterval(interval);
@@ -284,7 +278,7 @@ export default function UploadPage() {
             }}
           >
             You need to connect your wallet to list projects on NexaMarket.
-            Your wallet address becomes your seller identity.
+            Your username becomes your public seller identity.
           </p>
           <Btn
             size="lg"
@@ -329,7 +323,7 @@ export default function UploadPage() {
             <Icon name="check" size={36} color={TOKENS.green} />
           </div>
           <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 12 }}>
-            Project Listed!
+            Project uploaded successfully.
           </h2>
           <p
             style={{
@@ -342,9 +336,7 @@ export default function UploadPage() {
             <strong style={{ color: TOKENS.text }}>
               {form.title || "Your asset"}
             </strong>{" "}
-            has been uploaded to Supabase Storage. Its private file link is now
-            saved with the listing metadata and only shown to the owner or a
-            purchaser.
+            is now listed and registered on Injective.
           </p>
           <div
             style={{
@@ -359,17 +351,17 @@ export default function UploadPage() {
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
-                { label: "Storage", value: "Supabase Storage", mono: false },
+                { label: "Storage", value: "Pinata / IPFS", mono: false },
                 { label: "File", value: form.fileName, mono: true },
                 {
-                  label: "File Link",
-                  value: publishedFileUrl || "Saved with listing metadata",
-                  mono: true,
+                  label: "Previews",
+                  value: `${previewFiles.length} image${previewFiles.length === 1 ? "" : "s"}`,
+                  mono: false,
                 },
                 {
-                  label: "Contract Tx",
-                  value: publishedTxHash || "Pending registration",
-                  mono: true,
+                  label: "Blockchain",
+                  value: publishedTxHash ? "Confirmed" : "Pending",
+                  mono: false,
                 },
                 { label: "Visibility", value: "Contract-verified only", mono: false },
               ].map((item, i) => (
@@ -427,8 +419,8 @@ export default function UploadPage() {
                 setStep(1);
                 setForm(EMPTY_FORM);
                 setSelectedFile(null);
+                setPreviewFiles([]);
                 setPublishedProjectId(null);
-                setPublishedFileUrl(null);
                 setPublishedTxHash(null);
               }}
               style={{ flex: 1, justifyContent: "center" }}
@@ -466,8 +458,8 @@ export default function UploadPage() {
           </h1>
           <p style={{ color: TOKENS.textMuted, fontSize: 15 }}>
             Sell your blueprints, BIM models, specs, or calculations on
-            NexaMarket. Files stored on Supabase Storage and revealed only to
-            verified owners or buyers.
+            NexaMarket. Files and preview images are pinned to IPFS, while
+            downloads remain contract-verified.
           </p>
         </div>
       </div>
@@ -738,6 +730,163 @@ export default function UploadPage() {
               </div>
 
               <div>
+                <label style={labelStyle}>Primary Preview Image *</label>
+                <input
+                  ref={previewInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file?.type.startsWith("image/")) {
+                      setPreviewFiles((current) => [
+                        file,
+                        ...current.slice(1),
+                      ]);
+                    }
+                    event.target.value = "";
+                  }}
+                  style={{ display: "none" }}
+                />
+                <div
+                  onClick={() => previewInputRef.current?.click()}
+                  style={{
+                    border: `2px dashed ${
+                      previewFiles.length ? TOKENS.green : TOKENS.border
+                    }`,
+                    borderRadius: 14,
+                    padding: 24,
+                    background: TOKENS.bg2,
+                    cursor: "pointer",
+                    textAlign: "center",
+                  }}
+                >
+                  <Icon name="plus" size={22} color={TOKENS.cyan} />
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      marginTop: 8,
+                      color: TOKENS.text,
+                    }}
+                  >
+                    {previewFiles[0]
+                      ? "Replace primary preview image"
+                      : "Choose primary preview image"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: TOKENS.textMuted,
+                      marginTop: 4,
+                    }}
+                  >
+                    One image is required · PNG, JPG, WEBP, or GIF
+                  </div>
+                </div>
+
+                <input
+                  ref={additionalPreviewInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files || []).filter(
+                      (file) => file.type.startsWith("image/"),
+                    );
+                    if (files.length) {
+                      setPreviewFiles((current) => [...current, ...files]);
+                    }
+                    event.target.value = "";
+                  }}
+                  style={{ display: "none" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => additionalPreviewInputRef.current?.click()}
+                  disabled={!previewFiles[0]}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: `1px solid ${TOKENS.border}`,
+                    background: "transparent",
+                    color: previewFiles[0] ? TOKENS.cyan : TOKENS.textDim,
+                    cursor: previewFiles[0] ? "pointer" : "not-allowed",
+                    fontFamily: "inherit",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  + Add optional additional images
+                </button>
+                {previewFiles.length > 0 && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(170px, 1fr))",
+                      gap: 10,
+                      marginTop: 12,
+                    }}
+                  >
+                    {previewFiles.map((file, index) => (
+                      <div
+                        key={`${file.name}-${file.lastModified}-${index}`}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: `1px solid ${TOKENS.border}`,
+                          background: TOKENS.bg1,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <Icon name="check" size={14} color={TOKENS.green} />
+                        <span
+                          title={file.name}
+                          style={{
+                            minWidth: 0,
+                            flex: 1,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            fontSize: 12,
+                            color: TOKENS.textMuted,
+                          }}
+                        >
+                          {index === 0 ? `Primary · ${file.name}` : file.name}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${file.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPreviewFiles((current) => {
+                              if (index === 0) return [];
+                              return current.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              );
+                            });
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: TOKENS.textDim,
+                            cursor: "pointer",
+                            padding: 2,
+                          }}
+                        >
+                          <Icon name="x" size={13} color="currentColor" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
                 <label style={labelStyle}>Storage Method</label>
                 <div className="up-row">
                   {STORAGE_OPTIONS.map((opt) => {
@@ -819,7 +968,7 @@ export default function UploadPage() {
                 </Btn>
                 <Btn
                   onClick={() => setStep(3)}
-                  disabled={!form.fileName}
+                  disabled={!form.fileName || previewFiles.length === 0}
                   icon="arrow"
                 >
                   Next: Pricing
@@ -993,10 +1142,15 @@ export default function UploadPage() {
                     { label: "License", value: form.license, mono: false },
                     {
                       label: "Storage",
-                      value: "Supabase Storage",
+                      value: "Pinata / IPFS",
                       mono: false,
                     },
                     { label: "File", value: form.fileName, mono: true },
+                    {
+                      label: "Preview Images",
+                      value: String(previewFiles.length),
+                      mono: true,
+                    },
                   ].map((item, i) => (
                     <div
                       key={i}
@@ -1056,10 +1210,10 @@ export default function UploadPage() {
                   style={{ display: "flex", flexDirection: "column", gap: 8 }}
                 >
                   {[
-                    "1. File uploaded to Supabase Storage",
-                    "2. Metadata and Supabase URL saved through the backend",
+                    "1. Project file and previews pinned directly to IPFS",
+                    "2. CIDs and project metadata saved in Supabase",
                     "3. Uploader access registered on Injective",
-                    "4. File link stays hidden until contract access is verified",
+                    "4. Project download stays gated by contract verification",
                   ].map((s, i) => (
                     <div
                       key={i}
@@ -1096,7 +1250,7 @@ export default function UploadPage() {
                     }}
                   >
                     <span style={{ fontSize: 13, color: TOKENS.textMuted }}>
-                      Uploading to Supabase Storage...
+                      Pinning files to IPFS...
                     </span>
                     <span
                       style={{
@@ -1159,7 +1313,9 @@ export default function UploadPage() {
                 </Btn>
                 <Btn
                   onClick={handleSubmit}
-                  disabled={uploading}
+                  disabled={
+                    uploading || !selectedFile || previewFiles.length === 0
+                  }
                   icon="upload"
                   size="lg"
                 >
@@ -1169,154 +1325,6 @@ export default function UploadPage() {
             </div>
           )}
 
-          {submitted && publishedProjectId && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
-                🎉 Project Published Successfully!
-              </h2>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                {/* Success Summary */}
-                <div
-                  style={{
-                    padding: 24,
-                    background: TOKENS.bg2,
-                    borderRadius: 14,
-                    border: `1px solid ${TOKENS.border}`,
-                  }}
-                >
-                  <div style={{ marginBottom: 16 }}>
-                    <h3 style={{ fontSize: 14, fontWeight: 700, color: TOKENS.cyan, marginBottom: 16 }}>
-                      What's Next
-                    </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[
-                        { icon: "check" as IconName, text: "Project is now live on marketplace" },
-                        { icon: "download" as IconName, text: "Only you can access files until purchase" },
-                        { icon: "code" as IconName, text: "Buyers can scan your QR code to view project" },
-                        { icon: "trending" as IconName, text: "Wait for purchases and earnings" },
-                      ].map((item, i) => (
-                        <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                          <Icon name={item.icon} size={18} color={TOKENS.green} style={{ marginTop: 2, flexShrink: 0 }} />
-                          <span style={{ fontSize: 13, color: TOKENS.textMuted }}>{item.text}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ borderTop: `1px solid ${TOKENS.border}`, paddingTop: 16, marginTop: 16 }}>
-                    <p style={{ fontSize: 12, color: TOKENS.textDim, marginBottom: 12 }}>Project ID</p>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: TOKENS.cyan, fontFamily: "monospace" }}>
-                      {publishedProjectId}
-                    </p>
-
-                    {publishedCid ? (
-                      <div style={{ marginTop: 16 }}>
-                        <p style={{ fontSize: 12, color: TOKENS.textDim, marginBottom: 6 }}>
-                          IPFS CID
-                        </p>
-                        <p
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: TOKENS.cyan,
-                            fontFamily: "monospace",
-                            wordBreak: "break-all",
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          {publishedCid}
-                        </p>
-                        {publishedIpfsUrl && (
-                          <a
-                            href={publishedIpfsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 6,
-                              marginTop: 8,
-                              fontSize: 12,
-                              color: TOKENS.green,
-                              textDecoration: "underline",
-                              wordBreak: "break-all",
-                            }}
-                          >
-                            <Icon name="chain" size={12} color={TOKENS.green} />
-                            Open on IPFS gateway
-                          </a>
-                        )}
-                      </div>
-                    ) : pinError ? (
-                      <div
-                        style={{
-                          marginTop: 16,
-                          padding: 12,
-                          borderRadius: 10,
-                          background: "rgba(245,158,11,0.06)",
-                          border: "1px solid rgba(245,158,11,0.2)",
-                        }}
-                      >
-                        <p style={{ fontSize: 12, color: TOKENS.gold, fontWeight: 600, marginBottom: 4 }}>
-                          IPFS pinning skipped
-                        </p>
-                        <p style={{ fontSize: 12, color: TOKENS.textMuted, lineHeight: 1.5 }}>
-                          {pinError}
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                {/* QR Code Display */}
-                {qrCodeGenerated && publishedProjectId && (
-                  <div style={{ width: "100%" }}>
-                    <ProjectQRCode
-                      projectId={publishedProjectId}
-                      projectTitle={form.title}
-                      size={240}
-                      showDetails={false}
-                      allowDownload={true}
-                      allowShare={true}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div
-                style={{
-                  padding: 20,
-                  background: "rgba(0,212,255,0.04)",
-                  borderRadius: 12,
-                  border: "1px solid rgba(0,212,255,0.12)",
-                }}
-              >
-                <p style={{ fontSize: 13, color: TOKENS.cyan, fontWeight: 700, marginBottom: 8 }}>
-                  Share Your Project
-                </p>
-                <p style={{ fontSize: 13, color: TOKENS.textMuted, lineHeight: 1.6 }}>
-                  Share the QR code with potential buyers or visit your project dashboard to manage listings.
-                </p>
-              </div>
-
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <Btn
-                  onClick={() => router.push("/dashboard")}
-                  variant="secondary"
-                  icon="dashboard"
-                >
-                  Go to Dashboard
-                </Btn>
-                <Btn
-                  onClick={() => router.push(`/project/${publishedProjectId}`)}
-                  icon="arrow"
-                >
-                  View Project
-                </Btn>
-              </div>
-            </div>
-          )}
         </Card>
       </div>
 

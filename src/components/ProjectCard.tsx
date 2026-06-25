@@ -6,6 +6,7 @@ import { TOKENS } from "@/lib/tokens";
 import type { Project } from "@/types";
 import Icon from "./ui/Icon";
 import Badge from "./ui/Badge";
+import ProjectPreview from "./ProjectPreview";
 
 interface ProjectCardProps {
   project: Project;
@@ -27,8 +28,7 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        background:
-          "linear-gradient(135deg, rgba(13,22,37,0.95), rgba(8,15,26,0.98))",
+        background: "var(--card)",
         border: `1px solid ${hov ? TOKENS.borderHover : TOKENS.border}`,
         borderRadius: 16,
         overflow: "hidden",
@@ -36,16 +36,14 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
         transition: "all 0.25s ease",
         transform: hov ? "translateY(-3px)" : "none",
         boxShadow: hov
-          ? "0 12px 40px rgba(0,0,0,0.5), 0 0 20px rgba(0,212,255,0.08)"
-          : "0 4px 16px rgba(0,0,0,0.3)",
+          ? "0 12px 40px var(--shadow), 0 0 20px rgba(0,212,255,0.08)"
+          : "0 4px 16px var(--shadow)",
       }}
     >
-      <div
+      <ProjectPreview
+        project={project}
         style={{
           height: 140,
-          background: project.preview,
-          position: "relative",
-          overflow: "hidden",
         }}
       >
         <div
@@ -55,31 +53,6 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
             backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(255,255,255,0.03) 19px, rgba(255,255,255,0.03) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(255,255,255,0.03) 19px, rgba(255,255,255,0.03) 20px)`,
           }}
         />
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 10,
-              background: "rgba(255,255,255,0.07)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backdropFilter: "blur(8px)",
-              border: "1px solid rgba(255,255,255,0.1)",
-            }}
-          >
-            <Icon name="blueprint" size={22} color="rgba(255,255,255,0.6)" />
-          </div>
-        </div>
         {project.featured && (
           <div style={{ position: "absolute", top: 12, left: 12 }}>
             <Badge color="gold">Featured</Badge>
@@ -102,7 +75,7 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
         >
           {project.price} INJ
         </div>
-      </div>
+      </ProjectPreview>
 
       <div style={{ padding: "18px 20px 20px" }}>
         <div style={{ marginBottom: 8 }}>
@@ -197,7 +170,7 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
                 fontFamily: "var(--font-mono), monospace",
               }}
             >
-              {project.owner}
+              {project.ownerUsername || "Verified seller"}
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

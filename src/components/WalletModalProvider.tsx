@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useState, ReactNode } from "react";
 import WalletModal from "./WalletModal";
+import UsernameModal from "./UsernameModal";
 
 interface Ctx {
   open: () => void;
@@ -24,6 +25,7 @@ export default function WalletModalProvider({ children }: { children: ReactNode 
     <WalletModalCtx.Provider value={{ open, close }}>
       {children}
       {show && <WalletModal onClose={close} />}
+      <UsernameModal />
     </WalletModalCtx.Provider>
   );
 }

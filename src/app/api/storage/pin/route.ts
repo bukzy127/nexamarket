@@ -6,58 +6,30 @@ export const runtime = "nodejs";
 // runtimes. Give the route a 60s timeout when possible.
 export const maxDuration = 60;
 
-interface PinRequest {
-  /** Public Supabase URL (or any HTTPS URL) of the file to pin. */
-  fileUrl: string;
-  fileName: string;
-  /** Optional content type to forward to Pinata. */
-  contentType?: string;
-  /** Wallet address of the owner; recorded in Pinata metadata. */
-  owner: string;
-  /** Optional project id to record in Pinata metadata for later lookups. */
-  projectId?: string | number;
-}
-
 export async function POST(req: Request) {
-  let body: PinRequest;
   try {
-    body = (await req.json()) as PinRequest;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
+    const form = await req.formData();
+    const file = form.get("file") as File | null;
+    const owner = String(form.get("owner") || "");
+    const projectId = String(form.get("projectId") || "");
+    const kind = String(form.get("kind") || "project");
 
-  const { fileUrl, fileName, contentType, owner, projectId } = body;
-  if (!fileUrl || !fileName || !owner) {
-    return NextResponse.json(
-      { error: "fileUrl, fileName, and owner are required" },
-      { status: 400 },
-    );
-  }
-
-  try {
-    // Pull the file bytes server-side. This stays inside Node and never
-    // exposes the Pinata JWT to the browser.
-    const fileRes = await fetch(fileUrl);
-    if (!fileRes.ok) {
+    if (!file || !owner) {
       return NextResponse.json(
-        { error: `Source file fetch failed (${fileRes.status})` },
-        { status: 502 },
+        { error: "file and owner are required" },
+        { status: 400 },
       );
     }
-    const arrayBuffer = await fileRes.arrayBuffer();
-    const resolvedContentType =
-      contentType ||
-      fileRes.headers.get("content-type") ||
-      "application/octet-stream";
 
     const result = await pinFileToIpfs(
-      arrayBuffer,
-      fileName,
-      resolvedContentType,
+      await file.arrayBuffer(),
+      file.name,
+      file.type || "application/octet-stream",
       {
         owner,
         ...(projectId ? { projectId: String(projectId) } : {}),
-        source: "nexamarket-upload",
+        kind,
+        source: "nexamarket-direct-upload",
       },
     );
 

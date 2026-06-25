@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyWalletSignature } from "@/lib/server/auth";
 import { getProject } from "@/lib/server/projectStore";
 import { verifyProjectAccess } from "@/lib/server/injectiveAccess";
+import { recordActivity } from "@/lib/server/appStore";
 
 export const runtime = "nodejs";
 
@@ -42,15 +43,22 @@ export async function POST(
   }
   if (!project.fileUrl) {
     return NextResponse.json(
-      { error: "project file URL is missing" },
+      { error: "project IPFS file URL is missing" },
       { status: 404 },
     );
   }
+
+  await recordActivity({
+    wallet,
+    type: "download",
+    projectId: project.id,
+    projectTitle: project.title,
+  }).catch(() => undefined);
 
   return NextResponse.json({
     fileUrl: project.fileUrl,
     downloadUrl: project.fileUrl,
     fileName: project.fileName,
-    storagePath: project.storagePath,
+    cid: project.cid,
   });
 }

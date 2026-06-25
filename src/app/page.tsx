@@ -57,7 +57,7 @@ const WHY_BLOCKCHAIN: { icon: IconName; color: string; title: string; desc: stri
     icon: "shield",
     color: TOKENS.cyan,
     title: "Tamper-Proof",
-    desc: "Blueprints and specs are stored in Supabase while access is gated by wallet ownership.",
+    desc: "Blueprints and specs are pinned on IPFS while access is gated by wallet ownership.",
   },
   {
     icon: "chain",
@@ -191,7 +191,7 @@ export default function LandingPage() {
                 textTransform: "uppercase",
               }}
             >
-              Built on Injective · Supabase Storage · Ownership-Gated Files
+              Built on Injective · Pinata / IPFS · Ownership-Gated Files
             </span>
           </div>
 
@@ -231,7 +231,7 @@ export default function LandingPage() {
           >
             Buy, sell, and own blueprints, BIM models, engineering specs, and
             construction project files using cryptocurrency. Verified ownership
-            on Injective blockchain. Files stored in Supabase and revealed only
+            on Injective blockchain. Files stored on IPFS and revealed only
             to verified owners.
           </p>
 

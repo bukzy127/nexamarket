@@ -18,25 +18,31 @@ export interface Project {
   price: number;
   /** Wallet address (or short form) of current owner. */
   owner: string;
+  /** Public username resolved from the owner's wallet profile. */
+  ownerUsername?: string;
   /** Original creator/seller wallet address. */
   creator?: string;
   rating: number;
   reviews: number;
   tags: string[];
-  /** Solid CSS color used for the engineering-grid preview backdrop. */
+  /** Primary preview image URL, with legacy colors supported as a fallback. */
   preview: string;
+  /** Public preview image gateway URLs. */
+  previewImages?: string[];
   featured: boolean;
   sales: number;
-  /** Server-only Supabase Storage download URL for the private project package. */
+  /** Server-only IPFS gateway URL for the access-gated project package. */
   fileUrl?: string;
   fileName?: string;
   fileSize?: number;
-  storageProvider?: "supabase" | "supabase+ipfs";
+  storageProvider?: "supabase" | "supabase+ipfs" | "ipfs";
   storagePath?: string;
   /** IPFS content identifier (CIDv1). Present when the file has been pinned. */
   cid?: string;
   /** Public IPFS gateway URL — `https://<gateway>/ipfs/<cid>`. */
   ipfsUrl?: string;
+  /** Server-only preview CIDs corresponding to previewImages. */
+  previewCids?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -53,10 +59,26 @@ export interface Purchase {
 
 export interface UserProfile {
   address: string;
+  username: string;
   displayName?: string;
   bio?: string;
   avatarUrl?: string;
   createdAt: string;
+}
+
+export type ActivityType = "upload" | "purchase" | "sale" | "download";
+
+export interface Activity {
+  id: string;
+  wallet: string;
+  type: ActivityType;
+  projectId?: number;
+  projectTitle?: string;
+  counterparty?: string;
+  counterpartyUsername?: string;
+  amount?: string;
+  txHash?: string;
+  timestamp: string;
 }
 
 export type WalletType = "metamask";

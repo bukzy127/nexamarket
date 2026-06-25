@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Download, Share2, Copy, Check } from "lucide-react";
 import { generateProjectUrl, generateQRCodeDataUrl, downloadQRCode } from "@/lib/qrcode";
+import { readableError } from "@/lib/errors";
 
 interface ProjectQRCodeProps {
   projectId: string | number;
@@ -40,7 +41,7 @@ export const ProjectQRCode: React.FC<ProjectQRCodeProps> = ({
         const dataUrl = await generateQRCodeDataUrl(projectUrl, size);
         setQrDataUrl(dataUrl);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to generate QR code");
+        setError(readableError(err, "The QR code could not be generated."));
         console.error("QR code generation error:", err);
       } finally {
         setIsLoading(false);
@@ -85,8 +86,12 @@ export const ProjectQRCode: React.FC<ProjectQRCodeProps> = ({
   if (error) {
     return (
       <div className="flex flex-col items-center gap-4 p-6 bg-red-500/10 border border-red-500/30 rounded-lg">
-        <p className="text-red-400">Failed to generate QR code</p>
-        <p className="text-sm text-red-300">{error}</p>
+        <p className="text-red-400 text-center font-semibold">
+          QR code unavailable
+        </p>
+        <p className="text-sm text-red-300 text-center leading-relaxed max-w-sm">
+          {error}
+        </p>
       </div>
     );
   }

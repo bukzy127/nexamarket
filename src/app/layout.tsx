@@ -4,6 +4,7 @@ import { Toaster } from "react-hot-toast";
 import Navbar from "@/components/Navbar";
 import PageTransition from "@/components/PageTransition";
 import WalletModalProvider from "@/components/WalletModalProvider";
+import ThemeProvider from "@/components/ThemeProvider";
 import "./globals.css";
 
 const space = Space_Grotesk({
@@ -23,7 +24,7 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "NexaMarket — Decentralized Construction Asset Marketplace",
   description:
-    "Buy, sell, and own blueprints, BIM models, engineering specs, and construction project files using cryptocurrency. Verified ownership on Injective blockchain. Files stored in Supabase Storage.",
+    "Buy, sell, and own blueprints, BIM models, engineering specs, and construction project files using cryptocurrency. Verified ownership on Injective blockchain. Files stored on IPFS.",
   keywords: [
     "Injective",
     "Web3",
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
     "Blueprints",
     "BIM",
     "CAD",
-    "Supabase Storage",
+    "IPFS",
     "Marketplace",
     "AEC",
   ],
@@ -49,22 +50,44 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${space.variable} ${mono.variable}`}>
+    <html
+      lang="en"
+      className={`${space.variable} ${mono.variable}`}
+      data-theme="dark"
+      suppressHydrationWarning
+    >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{var t=localStorage.getItem("nexamarket:theme");document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){}',
+          }}
+        />
+      </head>
       <body className="min-h-screen font-sans antialiased">
-        <WalletModalProvider>
-          <Navbar />
-          <PageTransition>
-            <main>{children}</main>
-          </PageTransition>
-        </WalletModalProvider>
+        <ThemeProvider>
+          <WalletModalProvider>
+            <Navbar />
+            <PageTransition>
+              <main>{children}</main>
+            </PageTransition>
+          </WalletModalProvider>
+        </ThemeProvider>
         <Toaster
           position="bottom-right"
           toastOptions={{
             style: {
-              background: "rgba(13,22,37,0.95)",
-              color: "#e8f0fe",
-              border: "1px solid rgba(0,212,255,0.2)",
+              background: "var(--bg2)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
               backdropFilter: "blur(12px)",
+              maxWidth: "min(420px, calc(100vw - 32px))",
+              padding: "13px 15px",
+              lineHeight: "1.55",
+              textAlign: "left",
+              overflowWrap: "break-word",
+              wordBreak: "normal",
+              whiteSpace: "normal",
             },
           }}
         />

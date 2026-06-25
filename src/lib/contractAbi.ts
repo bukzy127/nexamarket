@@ -1,4 +1,9 @@
 export const NEXA_MARKET_ACCESS_ABI = [
+  { inputs: [], name: "ProjectExists", type: "error" },
+  { inputs: [], name: "ProjectNotFound", type: "error" },
+  { inputs: [], name: "Unauthorized", type: "error" },
+  { inputs: [], name: "IncorrectPayment", type: "error" },
+  { inputs: [], name: "OwnerCannotBuyOwnProject", type: "error" },
   {
     inputs: [
       { internalType: "uint256", name: "projectId", type: "uint256" },

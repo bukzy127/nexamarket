@@ -7,6 +7,7 @@ import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
 import Badge from "@/components/ui/Badge";
 import Icon, { type IconName } from "@/components/ui/Icon";
+import { readableError } from "@/lib/errors";
 
 type Timeframe = "1D" | "1W" | "1M" | "3M" | "1Y";
 type ChartType = "line" | "candle";
@@ -108,9 +109,7 @@ export default function MarketsPage() {
       })
       .catch((err: unknown) => {
         if ((err as { name?: string }).name === "AbortError") return;
-        setError(
-          err instanceof Error ? err.message : "Failed to load market data.",
-        );
+        setError(readableError(err, "Market data is temporarily unavailable."));
       })
       .finally(() => setLoading(false));
 

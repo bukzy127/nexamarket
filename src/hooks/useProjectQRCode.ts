@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { generateProjectUrl, generateQRCodeDataUrl } from "@/lib/qrcode";
+import { readableError } from "@/lib/errors";
 
 interface UseProjectQRCodeReturn {
   isGenerating: boolean;
@@ -49,7 +50,10 @@ export function useProjectQRCode(): UseProjectQRCodeReturn {
 
         return dataUrl;
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Unknown error";
+        const errorMsg = readableError(
+          err,
+          "The QR code could not be generated.",
+        );
         setError(errorMsg);
         throw err;
       } finally {
@@ -80,7 +84,10 @@ export function useProjectQRCode(): UseProjectQRCodeReturn {
           createdAt: data.createdAt,
         };
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : "Unknown error";
+        const errorMsg = readableError(
+          err,
+          "The QR code could not be loaded.",
+        );
         setError(errorMsg);
         return null;
       }
@@ -101,7 +108,10 @@ export function useProjectQRCode(): UseProjectQRCodeReturn {
 
       return true;
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Unknown error";
+      const errorMsg = readableError(
+        err,
+        "The QR code could not be deleted.",
+      );
       setError(errorMsg);
       return false;
     }
