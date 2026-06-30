@@ -31,3 +31,12 @@ export async function verifyProjectAccess(
   const marketplace = contract();
   return marketplace.hasAccess(BigInt(project.id), wallet);
 }
+
+export async function isProjectRegistered(projectId: number): Promise<boolean> {
+  const marketplace = contract();
+  const project = (await marketplace.projects(BigInt(projectId))) as {
+    exists?: boolean;
+    4?: boolean;
+  };
+  return Boolean(project.exists ?? project[4]);
+}

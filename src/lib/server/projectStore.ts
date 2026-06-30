@@ -1,5 +1,6 @@
 import type { Category, Project } from "@/types";
 import { getSalesCounts, getUsernames } from "@/lib/server/appStore";
+import { isProjectRegistered } from "@/lib/server/injectiveAccess";
 
 const PROJECTS_TABLE = "projects";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -208,10 +209,16 @@ export async function listProjects(): Promise<Project[]> {
       () => ({} as Record<number, number>),
     ),
   ]);
-  return projects.map((project) => ({
-    ...project,
-    ownerUsername:
-      project.ownerUsername || usernames[project.owner.toLowerCase()],
-    sales: salesCounts[project.id] ?? project.sales,
-  }));
+  const registrationStates = await Promise.all(
+    projects.map((project) =>
+      isProjectRegistered(project.id).catch(() => undefined),
+    ),
+  );
+  return projects.map((project, index) => ({
+      ...project,
+      ownerUsername:
+        project.ownerUsername || usernames[project.owner.toLowerCase()],
+      sales: salesCounts[project.id] ?? project.sales,
+      chainRegistered: registrationStates[index],
+    }));
 }

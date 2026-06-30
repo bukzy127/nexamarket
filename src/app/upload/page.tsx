@@ -132,6 +132,7 @@ export default function UploadPage() {
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState("Preparing files...");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewFiles, setPreviewFiles] = useState<File[]>([]);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -155,9 +156,7 @@ export default function UploadPage() {
     setUploading(true);
     setPublishError(null);
     setProgress(0);
-    const interval = window.setInterval(() => {
-      setProgress((p) => Math.min(p + 6, 90));
-    }, 220);
+    setUploadStage("Pinning project file and preview to IPFS...");
 
     try {
       const projectId = Date.now();
@@ -179,6 +178,8 @@ export default function UploadPage() {
           ),
         ),
       ]);
+      setProgress(55);
+      setUploadStage("Confirm registration in MetaMask...");
 
       const project = createUploadedProject({
         id: projectId,
@@ -201,6 +202,10 @@ export default function UploadPage() {
         previewImages: previewPins.map((pin) => pin.gateway),
         previewCids: previewPins.map((pin) => pin.cid),
       });
+      const chain = await registerProjectOnChain(project);
+      setProgress(82);
+      setUploadStage("Saving project metadata...");
+
       const metadataRes = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -212,7 +217,6 @@ export default function UploadPage() {
         throw new Error(`Metadata save failed: ${await metadataRes.text()}`);
       }
 
-      const chain = await registerProjectOnChain(project);
       addProject(project);
       setPublishedProjectId(project.id);
       setPublishedTxHash(chain.txHash);
@@ -226,13 +230,13 @@ export default function UploadPage() {
       }
       
       setProgress(100);
+      setUploadStage("Project published successfully.");
       setSubmitted(true);
     } catch (err) {
       setPublishError(
         readableError(err, "The project could not be published."),
       );
     } finally {
-      window.clearInterval(interval);
       setUploading(false);
     }
   }
@@ -1250,7 +1254,7 @@ export default function UploadPage() {
                     }}
                   >
                     <span style={{ fontSize: 13, color: TOKENS.textMuted }}>
-                      Pinning files to IPFS...
+                      {uploadStage}
                     </span>
                     <span
                       style={{

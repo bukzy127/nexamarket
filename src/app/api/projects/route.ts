@@ -2,13 +2,18 @@ import { NextResponse } from "next/server";
 import { listProjects, publicProject, saveProject } from "@/lib/server/projectStore";
 import type { Project } from "@/types";
 import { recordActivity } from "@/lib/server/appStore";
+import { isProjectRegistered } from "@/lib/server/injectiveAccess";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
     const projects = await listProjects();
-    return NextResponse.json({ projects: projects.map(publicProject) });
+    return NextResponse.json({
+      projects: projects
+        .filter((project) => project.chainRegistered !== false)
+        .map(publicProject),
+    });
   } catch (err) {
     console.error("Unable to load projects:", err);
     return NextResponse.json(
@@ -36,6 +41,16 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "id, IPFS file metadata, owner, price, and preview images are required" },
         { status: 400 },
+      );
+    }
+
+    if (!(await isProjectRegistered(project.id))) {
+      return NextResponse.json(
+        {
+          error:
+            "The project must be registered on Injective before its metadata can be published.",
+        },
+        { status: 409 },
       );
     }
 

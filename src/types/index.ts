@@ -43,6 +43,8 @@ export interface Project {
   ipfsUrl?: string;
   /** Server-only preview CIDs corresponding to previewImages. */
   previewCids?: string[];
+  /** Whether the listing exists in the configured Injective contract. */
+  chainRegistered?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

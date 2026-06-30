@@ -68,11 +68,22 @@ export async function pinFileToIpfs(
   }
   form.append("pinataOptions", JSON.stringify({ cidVersion: 1 }));
 
-  const res = await fetch(`${PINATA_API}/pinning/pinFileToIPFS`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${jwt}` },
-    body: form,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${PINATA_API}/pinning/pinFileToIPFS`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${jwt}` },
+      body: form,
+      signal: AbortSignal.timeout(90_000),
+    });
+  } catch (err) {
+    if ((err as { name?: string }).name === "TimeoutError") {
+      throw new Error(
+        "The IPFS upload took too long. Check your connection and try again.",
+      );
+    }
+    throw err;
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
