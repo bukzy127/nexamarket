@@ -5,17 +5,19 @@ import { useRouter } from "next/navigation";
 import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import { useWalletModal } from "@/components/WalletModalProvider";
-import { uploadToSupabaseStorage } from "@/lib/supabaseStorage";
+import { pinFileToIpfs } from "@/lib/supabaseStorage";
 import {
   createUploadedProject,
   useProjectCatalog,
 } from "@/hooks/useProjectCatalog";
 import { registerProjectOnChain } from "@/lib/injectiveContract";
+import { useProjectQRCode } from "@/hooks/useProjectQRCode";
 import type { Category } from "@/types";
 import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
 import Badge from "@/components/ui/Badge";
 import Icon, { type IconName } from "@/components/ui/Icon";
+import { readableError } from "@/lib/errors";
 
 const CATEGORIES = [
   "Architectural Plans",
@@ -62,8 +64,8 @@ const STORAGE_OPTIONS: {
 }[] = [
   {
     id: "supabase",
-    label: "Supabase Storage",
-    desc: "Files are uploaded to the project-files bucket",
+    label: "Pinata / IPFS",
+    desc: "Files and preview images are pinned directly to IPFS",
     icon: "zap",
     badge: "Active",
   },
@@ -119,20 +121,24 @@ export default function UploadPage() {
   const wallet = useWallet();
   const { open: openWallet } = useWalletModal();
   const { addProject } = useProjectCatalog(wallet.address);
+  const { generateAndStoreQRCode } = useProjectQRCode();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewInputRef = useRef<HTMLInputElement | null>(null);
+  const additionalPreviewInputRef = useRef<HTMLInputElement | null>(null);
 
   const [step, setStep] = useState(1);
   const [dragOver, setDragOver] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState("Preparing files...");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewFiles, setPreviewFiles] = useState<File[]>([]);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishedProjectId, setPublishedProjectId] = useState<number | null>(
     null,
   );
-  const [publishedFileUrl, setPublishedFileUrl] = useState<string | null>(null);
   const [publishedTxHash, setPublishedTxHash] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
@@ -146,20 +152,37 @@ export default function UploadPage() {
   }
 
   async function handleSubmit() {
-    if (!selectedFile || !wallet.address) return;
+    if (!selectedFile || previewFiles.length === 0 || !wallet.address) return;
     setUploading(true);
     setPublishError(null);
     setProgress(0);
-    const interval = window.setInterval(() => {
-      setProgress((p) => Math.min(p + 6, 90));
-    }, 220);
+    setUploadStage("Pinning project file and preview to IPFS...");
 
     try {
-      const upload = await uploadToSupabaseStorage(
-        selectedFile,
-        wallet.address,
-      );
+      const projectId = Date.now();
+      const [filePin, previewPins] = await Promise.all([
+        pinFileToIpfs({
+          file: selectedFile,
+          owner: wallet.address,
+          projectId,
+          kind: "project",
+        }),
+        Promise.all(
+          previewFiles.map((file) =>
+            pinFileToIpfs({
+              file,
+              owner: wallet.address!,
+              projectId,
+              kind: "preview",
+            }),
+          ),
+        ),
+      ]);
+      setProgress(55);
+      setUploadStage("Confirm registration in MetaMask...");
+
       const project = createUploadedProject({
+        id: projectId,
         title: form.title,
         description: form.description,
         category: form.category as Category,
@@ -169,11 +192,20 @@ export default function UploadPage() {
           .map((tag) => tag.trim())
           .filter(Boolean),
         owner: wallet.address,
+        ownerUsername: wallet.username || undefined,
         fileName: selectedFile.name,
-        fileSize: upload.size,
-        fileUrl: upload.url,
-        storagePath: upload.url,
+        fileSize: filePin.size,
+        fileUrl: filePin.gateway,
+        storagePath: filePin.cid,
+        cid: filePin.cid,
+        ipfsUrl: filePin.gateway,
+        previewImages: previewPins.map((pin) => pin.gateway),
+        previewCids: previewPins.map((pin) => pin.cid),
       });
+      const chain = await registerProjectOnChain(project);
+      setProgress(82);
+      setUploadStage("Saving project metadata...");
+
       const metadataRes = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -185,19 +217,26 @@ export default function UploadPage() {
         throw new Error(`Metadata save failed: ${await metadataRes.text()}`);
       }
 
-      const chain = await registerProjectOnChain(project);
       addProject(project);
       setPublishedProjectId(project.id);
-      setPublishedFileUrl(upload.url);
       setPublishedTxHash(chain.txHash);
+      
+      // Generate and store QR code
+      try {
+        await generateAndStoreQRCode(project.id, form.title);
+      } catch (err) {
+        console.error("Failed to generate QR code:", err);
+        // Continue anyway, QR generation failure should not block upload
+      }
+      
       setProgress(100);
+      setUploadStage("Project published successfully.");
       setSubmitted(true);
     } catch (err) {
       setPublishError(
-        err instanceof Error ? err.message : "Unable to publish asset.",
+        readableError(err, "The project could not be published."),
       );
     } finally {
-      window.clearInterval(interval);
       setUploading(false);
     }
   }
@@ -243,7 +282,7 @@ export default function UploadPage() {
             }}
           >
             You need to connect your wallet to list projects on NexaMarket.
-            Your wallet address becomes your seller identity.
+            Your username becomes your public seller identity.
           </p>
           <Btn
             size="lg"
@@ -288,7 +327,7 @@ export default function UploadPage() {
             <Icon name="check" size={36} color={TOKENS.green} />
           </div>
           <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 12 }}>
-            Project Listed!
+            Project uploaded successfully.
           </h2>
           <p
             style={{
@@ -301,9 +340,7 @@ export default function UploadPage() {
             <strong style={{ color: TOKENS.text }}>
               {form.title || "Your asset"}
             </strong>{" "}
-            has been uploaded to Supabase Storage. Its private file link is now
-            saved with the listing metadata and only shown to the owner or a
-            purchaser.
+            is now listed and registered on Injective.
           </p>
           <div
             style={{
@@ -318,17 +355,17 @@ export default function UploadPage() {
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
-                { label: "Storage", value: "Supabase Storage", mono: false },
+                { label: "Storage", value: "Pinata / IPFS", mono: false },
                 { label: "File", value: form.fileName, mono: true },
                 {
-                  label: "File Link",
-                  value: publishedFileUrl || "Saved with listing metadata",
-                  mono: true,
+                  label: "Previews",
+                  value: `${previewFiles.length} image${previewFiles.length === 1 ? "" : "s"}`,
+                  mono: false,
                 },
                 {
-                  label: "Contract Tx",
-                  value: publishedTxHash || "Pending registration",
-                  mono: true,
+                  label: "Blockchain",
+                  value: publishedTxHash ? "Confirmed" : "Pending",
+                  mono: false,
                 },
                 { label: "Visibility", value: "Contract-verified only", mono: false },
               ].map((item, i) => (
@@ -386,8 +423,8 @@ export default function UploadPage() {
                 setStep(1);
                 setForm(EMPTY_FORM);
                 setSelectedFile(null);
+                setPreviewFiles([]);
                 setPublishedProjectId(null);
-                setPublishedFileUrl(null);
                 setPublishedTxHash(null);
               }}
               style={{ flex: 1, justifyContent: "center" }}
@@ -425,8 +462,8 @@ export default function UploadPage() {
           </h1>
           <p style={{ color: TOKENS.textMuted, fontSize: 15 }}>
             Sell your blueprints, BIM models, specs, or calculations on
-            NexaMarket. Files stored on Supabase Storage and revealed only to
-            verified owners or buyers.
+            NexaMarket. Files and preview images are pinned to IPFS, while
+            downloads remain contract-verified.
           </p>
         </div>
       </div>
@@ -697,6 +734,163 @@ export default function UploadPage() {
               </div>
 
               <div>
+                <label style={labelStyle}>Primary Preview Image *</label>
+                <input
+                  ref={previewInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file?.type.startsWith("image/")) {
+                      setPreviewFiles((current) => [
+                        file,
+                        ...current.slice(1),
+                      ]);
+                    }
+                    event.target.value = "";
+                  }}
+                  style={{ display: "none" }}
+                />
+                <div
+                  onClick={() => previewInputRef.current?.click()}
+                  style={{
+                    border: `2px dashed ${
+                      previewFiles.length ? TOKENS.green : TOKENS.border
+                    }`,
+                    borderRadius: 14,
+                    padding: 24,
+                    background: TOKENS.bg2,
+                    cursor: "pointer",
+                    textAlign: "center",
+                  }}
+                >
+                  <Icon name="plus" size={22} color={TOKENS.cyan} />
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      marginTop: 8,
+                      color: TOKENS.text,
+                    }}
+                  >
+                    {previewFiles[0]
+                      ? "Replace primary preview image"
+                      : "Choose primary preview image"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: TOKENS.textMuted,
+                      marginTop: 4,
+                    }}
+                  >
+                    One image is required · PNG, JPG, WEBP, or GIF
+                  </div>
+                </div>
+
+                <input
+                  ref={additionalPreviewInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files || []).filter(
+                      (file) => file.type.startsWith("image/"),
+                    );
+                    if (files.length) {
+                      setPreviewFiles((current) => [...current, ...files]);
+                    }
+                    event.target.value = "";
+                  }}
+                  style={{ display: "none" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => additionalPreviewInputRef.current?.click()}
+                  disabled={!previewFiles[0]}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: `1px solid ${TOKENS.border}`,
+                    background: "transparent",
+                    color: previewFiles[0] ? TOKENS.cyan : TOKENS.textDim,
+                    cursor: previewFiles[0] ? "pointer" : "not-allowed",
+                    fontFamily: "inherit",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  + Add optional additional images
+                </button>
+                {previewFiles.length > 0 && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(170px, 1fr))",
+                      gap: 10,
+                      marginTop: 12,
+                    }}
+                  >
+                    {previewFiles.map((file, index) => (
+                      <div
+                        key={`${file.name}-${file.lastModified}-${index}`}
+                        style={{
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: `1px solid ${TOKENS.border}`,
+                          background: TOKENS.bg1,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <Icon name="check" size={14} color={TOKENS.green} />
+                        <span
+                          title={file.name}
+                          style={{
+                            minWidth: 0,
+                            flex: 1,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            fontSize: 12,
+                            color: TOKENS.textMuted,
+                          }}
+                        >
+                          {index === 0 ? `Primary · ${file.name}` : file.name}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${file.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPreviewFiles((current) => {
+                              if (index === 0) return [];
+                              return current.filter(
+                                (_, itemIndex) => itemIndex !== index,
+                              );
+                            });
+                          }}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: TOKENS.textDim,
+                            cursor: "pointer",
+                            padding: 2,
+                          }}
+                        >
+                          <Icon name="x" size={13} color="currentColor" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
                 <label style={labelStyle}>Storage Method</label>
                 <div className="up-row">
                   {STORAGE_OPTIONS.map((opt) => {
@@ -778,7 +972,7 @@ export default function UploadPage() {
                 </Btn>
                 <Btn
                   onClick={() => setStep(3)}
-                  disabled={!form.fileName}
+                  disabled={!form.fileName || previewFiles.length === 0}
                   icon="arrow"
                 >
                   Next: Pricing
@@ -952,10 +1146,15 @@ export default function UploadPage() {
                     { label: "License", value: form.license, mono: false },
                     {
                       label: "Storage",
-                      value: "Supabase Storage",
+                      value: "Pinata / IPFS",
                       mono: false,
                     },
                     { label: "File", value: form.fileName, mono: true },
+                    {
+                      label: "Preview Images",
+                      value: String(previewFiles.length),
+                      mono: true,
+                    },
                   ].map((item, i) => (
                     <div
                       key={i}
@@ -1015,10 +1214,10 @@ export default function UploadPage() {
                   style={{ display: "flex", flexDirection: "column", gap: 8 }}
                 >
                   {[
-                    "1. File uploaded to Supabase Storage",
-                    "2. Metadata and Supabase URL saved through the backend",
+                    "1. Project file and previews pinned directly to IPFS",
+                    "2. CIDs and project metadata saved in Supabase",
                     "3. Uploader access registered on Injective",
-                    "4. File link stays hidden until contract access is verified",
+                    "4. Project download stays gated by contract verification",
                   ].map((s, i) => (
                     <div
                       key={i}
@@ -1055,7 +1254,7 @@ export default function UploadPage() {
                     }}
                   >
                     <span style={{ fontSize: 13, color: TOKENS.textMuted }}>
-                      Uploading to Supabase Storage...
+                      {uploadStage}
                     </span>
                     <span
                       style={{
@@ -1118,7 +1317,9 @@ export default function UploadPage() {
                 </Btn>
                 <Btn
                   onClick={handleSubmit}
-                  disabled={uploading}
+                  disabled={
+                    uploading || !selectedFile || previewFiles.length === 0
+                  }
                   icon="upload"
                   size="lg"
                 >
@@ -1127,6 +1328,7 @@ export default function UploadPage() {
               </div>
             </div>
           )}
+
         </Card>
       </div>
 

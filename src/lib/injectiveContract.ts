@@ -28,11 +28,14 @@ async function signerContract() {
   await ensureInjectiveNetwork();
   const provider = await getBrowserProvider();
   const signer = await provider.getSigner();
-  return new ethers.Contract(
-    requireContractAddress(),
-    NEXA_MARKET_ACCESS_ABI,
-    signer,
-  );
+  return {
+    marketplace: new ethers.Contract(
+      requireContractAddress(),
+      NEXA_MARKET_ACCESS_ABI,
+      signer,
+    ),
+    signerAddress: await signer.getAddress(),
+  };
 }
 
 function readOnlyContract() {
@@ -49,30 +52,52 @@ export function injToWei(price: number): bigint {
   return ethers.parseEther(priceAsString);
 }
 
+async function waitForProjectAccess(
+  projectId: number,
+  wallet: string,
+  timeoutMs = 90_000,
+): Promise<void> {
+  const startedAt = Date.now();
+  const marketplace = readOnlyContract();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      if (await marketplace.hasAccess(BigInt(projectId), wallet)) return;
+    } catch {
+      // Injective RPC can briefly lag behind the wallet provider.
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+  }
+
+  throw new Error(
+    "The transaction was submitted, but Injective confirmation is taking longer than expected. Check MetaMask activity before trying again.",
+  );
+}
+
 export async function registerProjectOnChain(
   project: Project,
 ): Promise<ChainTxResult> {
-  const marketplace = await signerContract();
+  const { marketplace, signerAddress } = await signerContract();
   const projectPrice = injToWei(project.price);
   const tx = await marketplace.registerProject(
     BigInt(project.id),
     projectPrice,
-    project.storagePath || "",
+    project.cid || project.storagePath || "",
   );
-  const receipt = await tx.wait();
-  return { txHash: receipt?.hash || tx.hash };
+  await waitForProjectAccess(project.id, signerAddress);
+  return { txHash: tx.hash };
 }
 
 export async function purchaseProjectOnChain(
   project: Project,
 ): Promise<ChainTxResult> {
-  const marketplace = await signerContract();
+  const { marketplace, signerAddress } = await signerContract();
   const projectPrice = injToWei(project.price);
   const tx = await marketplace.purchase(BigInt(project.id), {
     value: projectPrice,
   });
-  const receipt = await tx.wait();
-  return { txHash: receipt?.hash || tx.hash };
+  await waitForProjectAccess(project.id, signerAddress);
+  return { txHash: tx.hash };
 }
 
 export async function hasProjectAccessOnChain(

@@ -3,7 +3,7 @@
 The frontend is wired for real services only:
 
 - MetaMask wallet connection on Injective EVM Testnet.
-- Supabase upload through backend API routes.
+- Direct Pinata/IPFS uploads through backend API routes.
 - Supabase-backed marketplace listings.
 - Injective EVM smart contract calls for project registration and purchases.
 - Download links returned only by the backend after wallet signature and

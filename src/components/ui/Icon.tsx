@@ -29,7 +29,10 @@ export type IconName =
   | "settings"
   | "logout"
   | "copy"
-  | "filter";
+  | "filter"
+  | "user"
+  | "sun"
+  | "moon";
 
 interface IconProps {
   name: IconName;
@@ -270,6 +273,26 @@ export default function Icon({
       return (
         <svg {...common}>
           <polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46" />
+        </svg>
+      );
+    case "user":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 22a8 8 0 0116 0" />
+        </svg>
+      );
+    case "sun":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+      );
+    case "moon":
+      return (
+        <svg {...common}>
+          <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
         </svg>
       );
     default:

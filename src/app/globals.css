@@ -6,12 +6,44 @@
   --bg0: #04080f;
   --bg1: #080f1a;
   --bg2: #0d1625;
+  --bg3: #111e33;
+  --bg4: #162540;
   --cyan: #00d4ff;
   --violet: #7c3aed;
   --text: #e8f0fe;
   --muted: #6b8aad;
   --dim: #3d5a7a;
   --border: rgba(0, 212, 255, 0.12);
+  --border-hover: rgba(0, 212, 255, 0.35);
+  --card: linear-gradient(
+    135deg,
+    rgba(13, 22, 37, 0.9) 0%,
+    rgba(8, 15, 26, 0.95) 100%
+  );
+  --nav: rgba(4, 8, 15, 0.88);
+  --nav-solid: rgba(4, 8, 15, 0.96);
+  --overlay: rgba(0, 0, 0, 0.75);
+  --shadow: rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  --bg0: #f5f8fc;
+  --bg1: #ffffff;
+  --bg2: #eef4fa;
+  --bg3: #e4edf7;
+  --bg4: #d8e5f2;
+  --text: #10243b;
+  --muted: #52708f;
+  --dim: #7890a8;
+  --border: rgba(0, 111, 153, 0.16);
+  --border-hover: rgba(0, 145, 190, 0.4);
+  --card: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(241, 247, 252, 0.98));
+  --nav: rgba(255, 255, 255, 0.9);
+  --nav-solid: rgba(255, 255, 255, 0.98);
+  --overlay: rgba(16, 36, 59, 0.45);
+  --shadow: rgba(28, 59, 87, 0.14);
+  color-scheme: light;
 }
 
 * {
@@ -38,11 +70,11 @@ body {
 input,
 textarea,
 select {
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 input::placeholder,
 textarea::placeholder {
-  color: #3d5a7a;
+  color: var(--dim);
 }
 
 a {
@@ -60,7 +92,7 @@ a {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #080f1a;
+  background: var(--bg1);
 }
 ::-webkit-scrollbar-thumb {
   background: rgba(0, 212, 255, 0.2);

@@ -5,6 +5,7 @@ import { TOKENS } from "@/lib/tokens";
 import { useWallet } from "@/hooks/useWallet";
 import type { WalletType } from "@/types";
 import Icon from "./ui/Icon";
+import { readableError } from "@/lib/errors";
 
 interface WalletModalProps {
   onClose: () => void;
@@ -27,14 +28,16 @@ const WALLETS: {
 export default function WalletModal({ onClose }: WalletModalProps) {
   const wallet = useWallet();
   const [connecting, setConnecting] = useState<WalletType | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   async function handleConnect(type: WalletType) {
     setConnecting(type);
+    setConnectError(null);
     try {
       await wallet.connect(type);
       onClose();
     } catch (err) {
-      console.error(err);
+      setConnectError(readableError(err, "MetaMask could not be connected."));
       setConnecting(null);
     }
   }
@@ -45,7 +48,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.75)",
+        background: "var(--overlay)",
         backdropFilter: "blur(8px)",
         zIndex: 300,
         display: "flex",
@@ -56,7 +59,7 @@ export default function WalletModal({ onClose }: WalletModalProps) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "linear-gradient(135deg,#0d1625,#080f1a)",
+          background: "var(--card)",
           border: `1px solid ${TOKENS.border}`,
           borderRadius: 20,
           padding: 36,
@@ -164,6 +167,24 @@ export default function WalletModal({ onClose }: WalletModalProps) {
             </button>
           ))}
         </div>
+        {connectError && (
+          <div
+            style={{
+              marginTop: 14,
+              padding: "11px 13px",
+              borderRadius: 10,
+              background: "rgba(244,63,94,0.08)",
+              border: "1px solid rgba(244,63,94,0.22)",
+              color: TOKENS.red,
+              fontSize: 12,
+              lineHeight: 1.55,
+              textAlign: "left",
+              overflowWrap: "break-word",
+            }}
+          >
+            {connectError}
+          </div>
+        )}
         <p
           style={{
             marginTop: 20,

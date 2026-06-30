@@ -7,16 +7,24 @@ import { hasProjectAccessOnChain } from "@/lib/injectiveContract";
 const CATALOG_EVENT = "nexamarket:catalog-updated";
 
 export interface UploadedProjectInput {
+  id?: number;
   title: string;
   description: string;
   category: Category;
   price: number;
   tags: string[];
   owner: string;
+  ownerUsername?: string;
   fileName: string;
   fileSize: number;
   fileUrl: string;
   storagePath: string;
+  /** Optional IPFS CID once the file has been pinned via Pinata. */
+  cid?: string;
+  /** Public IPFS gateway URL once pinned. */
+  ipfsUrl?: string;
+  previewImages: string[];
+  previewCids: string[];
 }
 
 function normalizeAddress(addr: string | null | undefined): string {
@@ -36,7 +44,7 @@ function publicCopy(project: Project): Project {
 
 export function createUploadedProject(input: UploadedProjectInput): Project {
   const now = new Date().toISOString();
-  const id = Date.now();
+  const id = input.id || Date.now();
   return {
     id,
     title: input.title,
@@ -44,18 +52,23 @@ export function createUploadedProject(input: UploadedProjectInput): Project {
     category: input.category,
     price: input.price,
     owner: input.owner,
+    ownerUsername: input.ownerUsername,
     creator: input.owner,
     rating: 0,
     reviews: 0,
     tags: input.tags,
-    preview: nextColor(id),
+    preview: input.previewImages[0] || nextColor(id),
+    previewImages: input.previewImages,
+    previewCids: input.previewCids,
     featured: false,
     sales: 0,
     fileUrl: input.fileUrl,
     fileName: input.fileName,
     fileSize: input.fileSize,
-    storageProvider: "supabase",
+    storageProvider: "ipfs",
     storagePath: input.storagePath,
+    cid: input.cid,
+    ipfsUrl: input.ipfsUrl,
     createdAt: now,
     updatedAt: now,
   };

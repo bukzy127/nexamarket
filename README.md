@@ -1,7 +1,7 @@
 # NexaMarket
 
-A decentralized project marketplace built with **Next.js**, **Supabase**,
-**MetaMask**, and **Injective EVM Testnet**.
+A decentralized project marketplace built with **Next.js**, **Pinata/IPFS**,
+**Supabase**, **MetaMask**, and **Injective EVM Testnet**.
 
 > Supabase upload/access workflow is documented in
 > [`docs/SUPABASE_WORKFLOW.md`](./docs/SUPABASE_WORKFLOW.md).
@@ -22,7 +22,7 @@ App boots at <http://localhost:3000>.
 | Path | What it is |
 | --- | --- |
 | `src/app/` | Next.js App Router pages: landing, marketplace, upload, dashboard, project detail |
-| `src/app/api/` | Backend routes for Supabase upload, metadata save, purchase confirmation, and access-gated downloads |
+| `src/app/api/` | Backend routes for IPFS pinning, metadata, profiles, purchases, and access-gated downloads |
 | `src/components/` | UI building blocks |
 | `src/lib/` | Wallet, Supabase, Injective EVM, and server helpers |
 | `src/hooks/useProjectCatalog.ts` | Supabase-backed public listing catalog |
@@ -35,7 +35,8 @@ App boots at <http://localhost:3000>.
 ## Tech
 
 - Next.js 14 (App Router) · TypeScript · React 18
-- Supabase Storage and Supabase database
+- Pinata/IPFS for project files and preview images
+- Supabase for metadata, profiles, purchases, and application activity
 - MetaMask on Injective EVM Testnet
 - Ethers.js contract calls
 - Zustand for wallet state

@@ -13,7 +13,7 @@ Functions:
 - `purchase(projectId)` requires exact INJ payment and transfers all funds
   directly to the owner.
 - `hasAccess(projectId, wallet)` is the read-only access check used by the
-  backend before returning Supabase download URLs.
+backend before returning IPFS download URLs.
 
 No platform fee is taken.
 
@@ -21,14 +21,14 @@ No platform fee is taken.
 
 1. User connects MetaMask.
 2. App switches MetaMask to Injective EVM Testnet.
-3. User uploads a file to Supabase Storage.
-4. Backend saves project metadata to the Supabase `projects` table.
+3. User pins the project file and preview images to IPFS through Pinata.
+4. Backend saves IPFS metadata to the Supabase `projects` table.
 5. Frontend calls `registerProject(projectId, price, metadataRef)` on Injective
-   EVM, using the Supabase file URL as `metadataRef`.
+   EVM, using the project CID as `metadataRef`.
 6. Buyer clicks `Download / Purchase`.
 7. Frontend calls `purchase(projectId)` with exact INJ value.
 8. Backend confirms `hasAccess(projectId, buyer)`.
-9. Download route returns the Supabase file URL only after contract access is
+9. Download route returns the IPFS gateway URL only after contract access is
    true.
 
 ## Injective EVM Testnet

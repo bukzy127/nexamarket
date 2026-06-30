@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyWalletSignature } from "@/lib/server/auth";
 import { verifyProjectAccess } from "@/lib/server/injectiveAccess";
 import { getProject } from "@/lib/server/projectStore";
+import { recordActivity, recordPurchase } from "@/lib/server/appStore";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,37 @@ export async function POST(
       { error: "purchase is not confirmed on Injective yet" },
       { status: 409 },
     );
+  }
+
+  if (txHash) {
+    const seller = project.creator || project.owner;
+    await recordPurchase({
+      projectId: project.id,
+      buyer: wallet,
+      seller,
+      price: project.price,
+      txHash,
+    }).catch(() => undefined);
+    await Promise.all([
+      recordActivity({
+        wallet,
+        type: "purchase",
+        projectId: project.id,
+        projectTitle: project.title,
+        counterparty: seller,
+        amount: project.price,
+        txHash,
+      }),
+      recordActivity({
+        wallet: seller,
+        type: "sale",
+        projectId: project.id,
+        projectTitle: project.title,
+        counterparty: wallet,
+        amount: project.price,
+        txHash,
+      }),
+    ]).catch(() => undefined);
   }
 
   return NextResponse.json({ ok: true, txHash: txHash || null });

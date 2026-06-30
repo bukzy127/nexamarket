@@ -9,6 +9,8 @@ import { useWalletModal } from "./WalletModalProvider";
 import Icon, { type IconName } from "./ui/Icon";
 import Btn from "./ui/Btn";
 import { shortAddress } from "@/lib/wallet";
+import { useTheme } from "@/components/ThemeProvider";
+import NotificationCenter from "@/components/NotificationCenter";
 
 const NAV: { href: string; label: string; icon: IconName }[] = [
   { href: "/", label: "Home", icon: "home" },
@@ -20,11 +22,13 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
 
 function ThemeToggle() {
   const [hov, setHov] = useState(false);
+  const { theme, toggleTheme } = useTheme();
   return (
     <button
+      onClick={toggleTheme}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      title="Theme"
+      title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       aria-label="Toggle theme"
       style={{
         width: 40,
@@ -40,26 +44,7 @@ function ThemeToggle() {
         flexShrink: 0,
       }}
     >
-      <svg
-        width="17"
-        height="17"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={TOKENS.cyan}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <circle cx="12" cy="12" r="5" />
-        <line x1="12" y1="1" x2="12" y2="3" />
-        <line x1="12" y1="21" x2="12" y2="23" />
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-        <line x1="1" y1="12" x2="3" y2="12" />
-        <line x1="21" y1="12" x2="23" y2="12" />
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-      </svg>
+      <Icon name={theme === "dark" ? "sun" : "moon"} size={17} color={TOKENS.cyan} />
     </button>
   );
 }
@@ -84,7 +69,7 @@ export default function Navbar() {
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 32px",
-        background: "rgba(4,8,15,0.88)",
+        background: "var(--nav)",
         backdropFilter: "blur(20px)",
         borderBottom: `1px solid ${TOKENS.border}`,
       }}
@@ -152,30 +137,7 @@ export default function Navbar() {
 
       {/* Right side */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button
-          aria-label="Notifications"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: TOKENS.textMuted,
-            position: "relative",
-            display: "flex",
-          }}
-        >
-          <Icon name="bell" size={18} color="currentColor" />
-          <span
-            style={{
-              position: "absolute",
-              top: -2,
-              right: -2,
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: TOKENS.cyan,
-            }}
-          />
-        </button>
+        <NotificationCenter />
 
         <ThemeToggle />
 
@@ -210,7 +172,7 @@ export default function Navbar() {
                 fontFamily: "var(--font-mono), JetBrains Mono, monospace",
               }}
             >
-              {shortAddress(wallet.address)}
+              {wallet.username || shortAddress(wallet.address)}
             </span>
           </button>
         ) : (
@@ -250,7 +212,7 @@ export default function Navbar() {
             top: 64,
             left: 0,
             right: 0,
-            background: "rgba(4,8,15,0.96)",
+            background: "var(--nav-solid)",
             borderBottom: `1px solid ${TOKENS.border}`,
             backdropFilter: "blur(20px)",
             padding: 16,

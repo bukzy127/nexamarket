@@ -3,14 +3,14 @@
  * Dark navy + cyan/violet palette tuned for the construction asset marketplace.
  */
 export const TOKENS = {
-  bg0: "#04080f",
-  bg1: "#080f1a",
-  bg2: "#0d1625",
-  bg3: "#111e33",
-  bg4: "#162540",
+  bg0: "var(--bg0)",
+  bg1: "var(--bg1)",
+  bg2: "var(--bg2)",
+  bg3: "var(--bg3)",
+  bg4: "var(--bg4)",
 
-  border: "rgba(0,212,255,0.12)",
-  borderHover: "rgba(0,212,255,0.35)",
+  border: "var(--border)",
+  borderHover: "var(--border-hover)",
 
   cyan: "#00d4ff",
   cyanDim: "rgba(0,212,255,0.15)",
@@ -26,9 +26,9 @@ export const TOKENS = {
   gold: "#f59e0b",
   goldDim: "rgba(245,158,11,0.15)",
 
-  text: "#e8f0fe",
-  textMuted: "#6b8aad",
-  textDim: "#3d5a7a",
+  text: "var(--text)",
+  textMuted: "var(--muted)",
+  textDim: "var(--dim)",
 } as const;
 
 export type BadgeColor =

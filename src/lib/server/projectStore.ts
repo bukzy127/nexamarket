@@ -1,4 +1,6 @@
 import type { Category, Project } from "@/types";
+import { getSalesCounts, getUsernames } from "@/lib/server/appStore";
+import { isProjectRegistered } from "@/lib/server/injectiveAccess";
 
 const PROJECTS_TABLE = "projects";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,18 +13,23 @@ interface ProjectRecord {
   category: Category;
   price: number | string;
   owner: string;
+  owner_username?: string | null;
   creator?: string | null;
   rating?: number | string | null;
   reviews?: number | null;
   tags?: string[] | null;
   preview: string;
+  preview_images?: string[] | null;
+  preview_cids?: string[] | null;
   featured?: boolean | null;
   sales?: number | null;
   file_url?: string | null;
   file_name?: string | null;
   file_size?: number | null;
-  storage_provider?: "supabase" | null;
+  storage_provider?: "supabase" | "supabase+ipfs" | "ipfs" | null;
   storage_path?: string | null;
+  cid?: string | null;
+  ipfs_url?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -92,18 +99,23 @@ function toRecord(project: Project): ProjectRecord {
     category: project.category,
     price: project.price,
     owner: project.owner,
+    owner_username: project.ownerUsername || null,
     creator: project.creator || project.owner,
     rating: project.rating,
     reviews: project.reviews,
     tags: project.tags,
     preview: project.preview,
+    preview_images: project.previewImages || [],
+    preview_cids: project.previewCids || [],
     featured: project.featured,
     sales: project.sales,
     file_url: project.fileUrl || null,
     file_name: project.fileName || null,
     file_size: project.fileSize || null,
-    storage_provider: "supabase",
+    storage_provider: project.storageProvider || "ipfs",
     storage_path: project.storagePath || null,
+    cid: project.cid || null,
+    ipfs_url: project.ipfsUrl || null,
     created_at: project.createdAt || new Date().toISOString(),
     updated_at: project.updatedAt || new Date().toISOString(),
   };
@@ -117,25 +129,37 @@ function fromRecord(record: ProjectRecord): Project {
     category: record.category,
     price: Number(record.price),
     owner: record.owner,
+    ownerUsername: record.owner_username || undefined,
     creator: record.creator || record.owner,
     rating: Number(record.rating || 0),
     reviews: Number(record.reviews || 0),
     tags: record.tags || [],
     preview: record.preview,
+    previewImages: record.preview_images || (record.preview ? [record.preview] : []),
+    previewCids: record.preview_cids || undefined,
     featured: Boolean(record.featured),
     sales: Number(record.sales || 0),
     fileUrl: record.file_url || undefined,
     fileName: record.file_name || undefined,
     fileSize: record.file_size || undefined,
-    storageProvider: "supabase",
+    storageProvider: record.storage_provider || "supabase",
     storagePath: record.storage_path || undefined,
+    cid: record.cid || undefined,
+    ipfsUrl: record.ipfs_url || undefined,
     createdAt: record.created_at || undefined,
     updatedAt: record.updated_at || undefined,
   };
 }
 
 export function publicProject(project: Project): Project {
-  const { fileUrl: _fileUrl, storagePath: _storagePath, ...safeProject } = project;
+  const {
+    fileUrl: _fileUrl,
+    storagePath: _storagePath,
+    cid: _cid,
+    ipfsUrl: _ipfsUrl,
+    previewCids: _previewCids,
+    ...safeProject
+  } = project;
   return safeProject;
 }
 
@@ -173,5 +197,28 @@ export async function listProjects(): Promise<Project[]> {
 
   if (!res.ok) throw await parseSupabaseError(res);
   const data = (await res.json()) as ProjectRecord[];
-  return data.map(fromRecord);
+  const projects = data.map(fromRecord);
+  const [usernames, salesCounts]: [
+    Record<string, string>,
+    Record<number, number>,
+  ] = await Promise.all([
+    getUsernames(projects.map((project) => project.owner)).catch(
+      () => ({} as Record<string, string>),
+    ),
+    getSalesCounts(projects.map((project) => project.id)).catch(
+      () => ({} as Record<number, number>),
+    ),
+  ]);
+  const registrationStates = await Promise.all(
+    projects.map((project) =>
+      isProjectRegistered(project.id).catch(() => undefined),
+    ),
+  );
+  return projects.map((project, index) => ({
+      ...project,
+      ownerUsername:
+        project.ownerUsername || usernames[project.owner.toLowerCase()],
+      sales: salesCounts[project.id] ?? project.sales,
+      chainRegistered: registrationStates[index],
+    }));
 }

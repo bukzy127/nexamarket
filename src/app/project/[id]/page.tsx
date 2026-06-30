@@ -22,13 +22,9 @@ import Card from "@/components/ui/Card";
 import Btn from "@/components/ui/Btn";
 import Badge from "@/components/ui/Badge";
 import Icon, { type IconName } from "@/components/ui/Icon";
-
-const TX_STEPS: { label: string; icon: IconName }[] = [
-  { label: "Verifying wallet", icon: "wallet" },
-  { label: "Checking INJ balance", icon: "shield" },
-  { label: "Transferring payment to owner", icon: "chain" },
-  { label: "Unlocking Supabase file link", icon: "check" },
-];
+import ProjectQRCode from "@/components/ProjectQRCode";
+import ProjectPreview from "@/components/ProjectPreview";
+import { readableError } from "@/lib/errors";
 
 const TABS = ["overview", "files", "history", "reviews"] as const;
 type Tab = (typeof TABS)[number];
@@ -47,7 +43,9 @@ export default function ProjectDetailPage() {
   const [showTxModal, setShowTxModal] = useState(false);
   const [txStep, setTxStep] = useState(0);
   const [txError, setTxError] = useState<string | null>(null);
+  const [txComplete, setTxComplete] = useState(false);
   const [securedFileUrl, setSecuredFileUrl] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   if (!project) {
     return (
@@ -95,11 +93,9 @@ export default function ProjectDetailPage() {
       setSecuredFileUrl(download.fileUrl);
       return download.fileUrl;
     } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Download access could not be verified.";
-      toast.error(message);
+      toast.error(
+        readableError(err, "Download access could not be verified."),
+      );
       return null;
     }
   }
@@ -119,16 +115,13 @@ export default function ProjectDetailPage() {
         return;
       }
     } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : "Unable to verify existing access.",
-      );
+      toast.error(readableError(err, "Unable to verify existing access."));
       return;
     }
 
     setTxStep(0);
     setTxError(null);
+    setTxComplete(false);
     setShowTxModal(true);
 
     try {
@@ -163,16 +156,24 @@ export default function ProjectDetailPage() {
       setPurchased(true);
       await requestVerifiedDownload(false);
       await wallet.refreshBalance();
-      await wait(450);
+      setTxComplete(true);
+      await wait(900);
       setShowTxModal(false);
     } catch (err) {
-      setTxError(err instanceof Error ? err.message : "Purchase failed.");
+      setTxError(readableError(err, "The purchase could not be completed."));
     }
   }
 
   const related = projects.filter(
     (p) => p.id !== project.id && p.category === project.category,
   ).slice(0, 3);
+  const sellerName = currentProject.ownerUsername || "the seller";
+  const txSteps: { label: string; icon: IconName }[] = [
+    { label: "Verifying wallet", icon: "wallet" },
+    { label: "Checking INJ balance", icon: "shield" },
+    { label: `Transferring payment to ${sellerName}`, icon: "chain" },
+    { label: "Unlocking verified download", icon: "check" },
+  ];
 
   return (
     <div
@@ -189,7 +190,7 @@ export default function ProjectDetailPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.75)",
+            background: "var(--overlay)",
             backdropFilter: "blur(8px)",
             zIndex: 200,
             display: "flex",
@@ -198,7 +199,16 @@ export default function ProjectDetailPage() {
             padding: 16,
           }}
         >
-          <Card style={{ padding: 40, width: 420, maxWidth: "100%", textAlign: "center" }}>
+          <Card
+            style={{
+              padding: "36px 32px",
+              width: 460,
+              maxWidth: "100%",
+              textAlign: "center",
+              maxHeight: "calc(100vh - 32px)",
+              overflowY: "auto",
+            }}
+          >
             <div
               style={{
                 width: 64,
@@ -215,23 +225,32 @@ export default function ProjectDetailPage() {
               <Icon name="zap" size={28} color={TOKENS.cyan} />
             </div>
             <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>
-              {txError ? "Payment Failed" : "Processing Payment"}
+              {txError
+                ? `Payment to ${sellerName} failed`
+                : txComplete
+                  ? "Purchase completed successfully."
+                  : "Processing Payment"}
             </h3>
             <p
               style={{
                 color: TOKENS.textMuted,
                 fontSize: 14,
-                marginBottom: 32,
+                lineHeight: 1.65,
+                margin: "0 auto 28px",
+                maxWidth: 360,
+                overflowWrap: "break-word",
               }}
             >
               {txError
                 ? txError
-                : "Injective smart contract executing and verifying access…"}
+                : txComplete
+                  ? "The project is now available in your dashboard."
+                  : "Injective smart contract executing and verifying access…"}
             </p>
-            <div
+            {!txComplete && !txError && <div
               style={{ display: "flex", flexDirection: "column", gap: 12 }}
             >
-              {TX_STEPS.map((step, i) => (
+              {txSteps.map((step, i) => (
                 <div
                   key={i}
                   style={{
@@ -320,7 +339,24 @@ export default function ProjectDetailPage() {
                   )}
                 </div>
               ))}
-            </div>
+            </div>}
+            {txError && (
+              <div
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 12,
+                  background: "rgba(244,63,94,0.08)",
+                  border: "1px solid rgba(244,63,94,0.22)",
+                  color: TOKENS.textMuted,
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                  textAlign: "left",
+                }}
+              >
+                No payment was completed. You can close this message and try
+                again after checking the reason above.
+              </div>
+            )}
             {txError && (
               <Btn
                 variant="secondary"
@@ -339,12 +375,17 @@ export default function ProjectDetailPage() {
       )}
 
       {/* Hero banner */}
-      <div
+      <ProjectPreview
+        project={{
+          ...project,
+          preview:
+            project.previewImages?.[previewIndex] || project.preview,
+          previewImages: [
+            project.previewImages?.[previewIndex] || project.preview,
+          ],
+        }}
         style={{
           height: 280,
-          background: project.preview,
-          position: "relative",
-          overflow: "hidden",
         }}
       >
         <div
@@ -395,7 +436,42 @@ export default function ProjectDetailPage() {
           </button>
           {project.featured && <Badge color="gold">Featured</Badge>}
         </div>
-      </div>
+      </ProjectPreview>
+
+      {project.previewImages && project.previewImages.length > 1 && (
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: "14px auto 0",
+            padding: "0 32px",
+            display: "flex",
+            gap: 10,
+            overflowX: "auto",
+          }}
+        >
+          {project.previewImages.map((image, index) => (
+            <button
+              key={image}
+              type="button"
+              onClick={() => setPreviewIndex(index)}
+              aria-label={`Show preview image ${index + 1}`}
+              style={{
+                width: 92,
+                height: 62,
+                flexShrink: 0,
+                borderRadius: 10,
+                border: `2px solid ${
+                  previewIndex === index ? TOKENS.cyan : TOKENS.border
+                }`,
+                backgroundImage: `url("${image}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                cursor: "pointer",
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       <div
         style={{
@@ -478,7 +554,7 @@ export default function ProjectDetailPage() {
                           fontFamily: "var(--font-mono), monospace",
                         }}
                       >
-                        {project.owner}
+                        {project.ownerUsername || "Verified seller"}
                       </span>
                     </div>
                     <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -589,9 +665,9 @@ export default function ProjectDetailPage() {
                   }}
                 >
                   This asset package includes all drawing files, documentation,
-                  and associated data. Files are currently stored in Supabase
-                  Storage, and the saved file link is only revealed after this
-                  wallet owns or purchases the listing.
+                  and associated data. Files are pinned on IPFS through Pinata,
+                  and the download is only returned after this wallet owns or
+                  purchases the listing.
                 </p>
                 <div
                   className="meta-grid"
@@ -611,7 +687,10 @@ export default function ProjectDetailPage() {
                     { label: "License", value: "This feature is not available yet." },
                     { label: "Last Updated", value: updatedAt },
                     { label: "Blockchain", value: "Injective" },
-                    { label: "Storage", value: "Supabase Storage" },
+                    {
+                      label: "Storage",
+                      value: "IPFS (Pinata)",
+                    },
                     {
                       label: "Asset ID",
                       value: `#${String(project.id).padStart(5, "0")}`,
@@ -654,6 +733,7 @@ export default function ProjectDetailPage() {
                     </div>
                   ))}
                 </div>
+
               </Card>
             )}
 
@@ -684,19 +764,7 @@ export default function ProjectDetailPage() {
                             marginBottom: 8,
                           }}
                         >
-                          Contract-verified Supabase file link
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: TOKENS.textMuted,
-                            fontFamily: "var(--font-mono), monospace",
-                            wordBreak: "break-all",
-                            lineHeight: 1.6,
-                            marginBottom: 12,
-                          }}
-                        >
-                          {securedFileUrl}
+                          Contract-verified download ready
                         </div>
                         <Btn
                           variant="green"
@@ -709,7 +777,7 @@ export default function ProjectDetailPage() {
                             );
                           }}
                         >
-                          Download Supabase File
+                          Download Project File
                         </Btn>
                       </div>
                     )}
@@ -929,7 +997,7 @@ export default function ProjectDetailPage() {
                 {(
                   [
                     { icon: "shield", text: "On-chain ownership transfer" },
-                    { icon: "chain", text: "Supabase link gated by ownership" },
+                    { icon: "chain", text: "IPFS download gated by ownership" },
                     { icon: "download", text: "Lifetime download access" },
                     { icon: "check", text: "Commercial use license" },
                     { icon: "blueprint", text: "CAD + PDF formats included" },
@@ -946,6 +1014,26 @@ export default function ProjectDetailPage() {
                   </div>
                 ))}
               </div>
+            </Card>
+
+            {/* QR Code Card */}
+            <Card style={{ padding: "28px 24px", textAlign: "center" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>
+                Share Project
+              </h3>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                <ProjectQRCode
+                  projectId={project.id}
+                  projectTitle={project.title}
+                  size={180}
+                  showDetails={false}
+                  allowDownload={true}
+                  allowShare={true}
+                />
+              </div>
+              <p style={{ fontSize: 12, color: TOKENS.textMuted, lineHeight: 1.5 }}>
+                Scan to instantly share this project with others
+              </p>
             </Card>
 
             <Card style={{ padding: 20 }}>
@@ -986,7 +1074,7 @@ export default function ProjectDetailPage() {
                       marginBottom: 3,
                     }}
                   >
-                    {project.owner}
+                    {project.ownerUsername || "Verified seller"}
                   </div>
                   <div style={{ fontSize: 12, color: TOKENS.textMuted }}>
                     Verified seller
@@ -1031,7 +1119,7 @@ export default function ProjectDetailPage() {
                     display: "block",
                   }}
                 >
-                  <div style={{ height: 100, background: p.preview }} />
+                  <ProjectPreview project={p} style={{ height: 100 }} />
                   <div style={{ padding: "16px 18px" }}>
                     <div
                       style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}
